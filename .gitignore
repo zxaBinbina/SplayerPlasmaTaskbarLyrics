@@ -1,0 +1,62 @@
+# 本机代理、账号及私有配置
+/.agents/
+/.codex/
+/.aws/
+/.ssh/
+/.config/
+/.local/
+/.secrets/
+/private/
+.env
+.env.*
+!.env.example
+*.local.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# 依赖、虚拟环境及构建产物
+node_modules/
+.pnpm-store/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+target/
+build/
+dist/
+artifacts/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.o
+*.a
+*.so
+*.node
+
+# 日志、缓存、临时文件及参考源码
+*.log
+/.cache/
+/tmp/
+/reference-sources/
+*.tmp
+*.bak
+
+# 安装包通过发布平台分发
+*.plasmoid
+*.rpm
+*.deb
+*.AppImage
+*.tar.gz
+*.zip
+
+# 本机编辑器和操作系统文件
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
