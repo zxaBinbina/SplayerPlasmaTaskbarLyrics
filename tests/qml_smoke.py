@@ -92,13 +92,17 @@ Window {{
             raise AssertionError(value.error().toString())
         return result[0] if isinstance(result, tuple) else result
     def visual_find(item, name):
-        if item.objectName() == name:
-            return item
-        for child in item.childItems():
-            found = visual_find(child, name)
-            if found is not None:
-                return found
-        return None
+        # Traverse in QML: PySide cannot wrap some private Kirigami item types.
+        return expression(item, """
+            (function find(item, name) {
+                if (item.objectName === name) return item;
+                for (var i = 0; i < item.children.length; i++) {
+                    var found = find(item.children[i], name);
+                    if (found) return found;
+                }
+                return null;
+            })(this, %s)
+        """ % json.dumps(name))
     data = {
         "protocol": 1, "session": "qml", "lyricRevision": 1,
         "settings": dict(DEFAULTS, maxWidth=340), "locale": "zh-CN",

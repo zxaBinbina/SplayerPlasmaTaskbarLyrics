@@ -229,6 +229,22 @@ Plasma 5 的动画表现仍需实机验收。
 状态记录保存在 `artifacts/fit-content-space-native-state.json`。
 “适合内容”下的按钮位置和空间使用已通过实际 QML 组件验证，仍需用户在该面板模式下确认观感。
 
+## 设置页排版
+
+设置页使用 Kirigami 原生表单，将选项分为歌词显示、尺寸与布局、主题与动画、
+交互与离线四组。标签与控件统一对齐，开关自带说明，数字显示像素单位，
+字号预览及缩放说明紧邻字号设置，主题色提供色块预览；与当前模式无关的选项置灰。
+
+KDE 原生样式离屏检查覆盖中英文、360／680 像素窗口宽度，以及 14／32 像素字号。
+全部 16 个设置控件均在水平边界内，窄窗口改为上下排列，无项目 QML 警告。
+既有 QML 应用／取消、共享设置及交互验证、Plasma 5/6 包检查通过。
+验证脚本改为在 QML 中遍历控件，避免 PySide 包装 Kirigami 私有控件时崩溃。
+
+已升级当前 Plasma 6 小部件并重载 Plasma。已安装的 16 个组件文件与构建一致，
+两项服务 active，HTTP 200、SP 插件已连接，保存设置未改变，无 SPTL 运行警告。
+预览为 `artifacts/qml-settings-full.png` 和 `artifacts/qml-settings-narrow.png`，
+实机状态为 `artifacts/settings-layout-native-state.json`。Plasma 5 仍需实机验收。
+
 ## 发布状态
 
 GitHub 发布由项目所有者自行执行。SP 插件市场、KDE Store 尚未提交，
