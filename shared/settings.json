@@ -1,0 +1,191 @@
+[
+  {
+    "key": "lyricMode",
+    "type": "select",
+    "label": "歌词模式 / Lyric layout",
+    "default": "double",
+    "options": [
+      {
+        "label": "双行歌词 / Two lyric lines",
+        "value": "double"
+      },
+      {
+        "label": "单行歌词＋歌曲信息 / Lyric + song information",
+        "value": "single"
+      }
+    ]
+  },
+  {
+    "key": "auxiliary",
+    "type": "select",
+    "label": "辅助歌词 / Secondary lyric",
+    "default": "translation",
+    "options": [
+      {
+        "label": "翻译 / Translation",
+        "value": "translation"
+      },
+      {
+        "label": "音译 / Romanization",
+        "value": "romanization"
+      },
+      {
+        "label": "关闭，显示下一句 / Next line",
+        "value": "off"
+      }
+    ]
+  },
+  {
+    "key": "singlePreferAux",
+    "type": "switch",
+    "label": "单行优先辅助歌词 / Prefer secondary in single mode",
+    "default": false
+  },
+  {
+    "key": "fontSize",
+    "type": "number",
+    "label": "基准字号（42 像素高时） / Reference font size (at 42px height)",
+    "default": 14,
+    "min": 9,
+    "max": 32
+  },
+  {
+    "key": "coverPosition",
+    "type": "select",
+    "label": "封面位置 / Cover position",
+    "default": "left",
+    "options": [
+      {
+        "label": "左侧 / Left",
+        "value": "left"
+      },
+      {
+        "label": "右侧 / Right",
+        "value": "right"
+      }
+    ]
+  },
+  {
+    "key": "widthMode",
+    "type": "select",
+    "label": "宽度模式 / Width mode",
+    "default": "auto",
+    "options": [
+      {
+        "label": "自动 / Automatic",
+        "value": "auto"
+      },
+      {
+        "label": "固定 / Fixed",
+        "value": "fixed"
+      }
+    ]
+  },
+  {
+    "key": "fixedWidth",
+    "type": "number",
+    "label": "固定宽度 / Fixed width",
+    "default": 320,
+    "min": 180,
+    "max": 1200
+  },
+  {
+    "key": "maxWidth",
+    "type": "number",
+    "label": "自动最大宽度 / Maximum automatic width",
+    "default": 420,
+    "min": 180,
+    "max": 1200
+  },
+  {
+    "key": "clickAction",
+    "type": "select",
+    "label": "点击主体 / Body click",
+    "default": "popup",
+    "options": [
+      {
+        "label": "完整歌词面板 / Full lyrics",
+        "value": "popup"
+      },
+      {
+        "label": "无操作 / Do nothing",
+        "value": "none"
+      },
+      {
+        "label": "打开 SP / Open SP",
+        "value": "open"
+      }
+    ]
+  },
+  {
+    "key": "offlineDisplay",
+    "type": "select",
+    "label": "SP 未运行 / When SP is closed",
+    "default": "icon",
+    "options": [
+      {
+        "label": "收起为图标 / Icon",
+        "value": "icon"
+      },
+      {
+        "label": "隐藏 / Hide",
+        "value": "hidden"
+      }
+    ]
+  },
+  {
+    "key": "offlineClick",
+    "type": "select",
+    "label": "收起图标点击 / Offline icon click",
+    "default": "launch",
+    "options": [
+      {
+        "label": "启动 SP / Launch SP",
+        "value": "launch"
+      },
+      {
+        "label": "无操作 / Do nothing",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "key": "clickLyricSeek",
+    "type": "switch",
+    "label": "点击歌词跳转 / Seek by clicking lyrics",
+    "default": true
+  },
+  {
+    "key": "themeMode",
+    "type": "select",
+    "label": "主题来源 / Theme source",
+    "default": "splayer",
+    "options": [
+      {
+        "label": "跟随 SP / Follow SP",
+        "value": "splayer"
+      },
+      {
+        "label": "跟随 Plasma / Follow Plasma",
+        "value": "plasma"
+      },
+      {
+        "label": "手动 / Manual",
+        "value": "manual"
+      }
+    ]
+  },
+  {
+    "key": "manualDark",
+    "type": "switch",
+    "label": "手动暗色 / Manual dark mode",
+    "default": true
+  },
+  {
+    "key": "manualAccent",
+    "type": "text",
+    "label": "手动主题色 / Manual accent (#RRGGBB)",
+    "default": "#fe7971",
+    "placeholder": "#fe7971"
+  }
+]

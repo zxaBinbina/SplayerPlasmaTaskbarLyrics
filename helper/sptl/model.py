@@ -1,0 +1,182 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+"""Validated, transport-independent shared state and an acknowledged command mailbox."""
+import copy
+import json
+import math
+import time
+from pathlib import Path
+
+PLUGIN_ID = "zxaBinbina.sptl"
+SCHEMA = json.loads((Path(__file__).resolve().parents[2] / "shared/settings.json").read_text())
+DEFAULTS = {item["key"]: item["default"] for item in SCHEMA}
+
+
+def finite(value, default=0):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else default
+
+
+def validate_settings(raw):
+    if not isinstance(raw, dict):
+        raw = {}
+    result = {}
+    for item in SCHEMA:
+        value = raw.get(item["key"], item["default"])
+        if item["type"] == "switch":
+            value = value if isinstance(value, bool) else item["default"]
+        elif item["type"] == "number":
+            value = max(item["min"], min(item["max"], finite(value, item["default"])))
+        elif item["type"] == "select":
+            value = value if value in [o["value"] for o in item["options"]] else item["default"]
+        else:
+            import re
+            value = value if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value) else item["default"]
+        result[item["key"]] = value
+    return result
+
+
+def normalize_lines(raw):
+    if not isinstance(raw, list) or len(raw) > 20000:
+        raise ValueError("invalid lyrics")
+    result = []
+    for line in raw:
+        if not isinstance(line, dict):
+            raise ValueError("invalid lyric line")
+        words = line.get("words", [])
+        if not isinstance(words, list) or len(words) > 5000:
+            raise ValueError("invalid lyric words")
+        clean_words = []
+        for word in words:
+            if not isinstance(word, dict):
+                raise ValueError("invalid lyric word")
+            clean_words.append({
+                "word": str(word.get("word", ""))[:20000],
+                "startTime": max(0, finite(word.get("startTime"), -1)),
+                "endTime": max(0, finite(word.get("endTime"), -1)),
+                "romanWord": str(word.get("romanWord", ""))[:20000],
+            })
+        start = finite(line.get("startTime"), -1)
+        end = finite(line.get("endTime"), -1)
+        result.append({
+            "words": clean_words, "text": "".join(w["word"] for w in clean_words),
+            "translatedLyric": str(line.get("translatedLyric", ""))[:20000],
+            "romanLyric": str(line.get("romanLyric", ""))[:20000],
+            "startTime": start, "endTime": end,
+            "timed": start >= 0,
+            "wordTimed": len(clean_words) > 1 and len({w["startTime"] for w in clean_words}) > 1 and
+                all(finite(w.get("startTime"), -1) >= 0 and finite(w.get("endTime"), -1) >= finite(w.get("startTime"), -1) for w in words),
+            "isBG": bool(line.get("isBG", False)),
+        })
+    return result
+
+
+def normalize_track(raw):
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("invalid track")
+    artists = raw.get("artists", [])
+    if isinstance(artists, list):
+        artists = " / ".join(str(a.get("name", "")) for a in artists if isinstance(a, dict))
+    return {key: str(raw.get(key, ""))[:20000] for key in ("id", "source", "title", "cover", "path")} | {
+        "artists": str(artists)[:20000], "duration": max(0, finite(raw.get("duration")))
+    }
+
+
+class State:
+    def __init__(self, settings=None, clock=time.monotonic):
+        self.clock = clock
+        self.settings = validate_settings(settings)
+        self.accept_legacy_settings = settings is None
+        self.track = None
+        self.lines = []
+        self.session = None
+        self.lyric_revision = -1
+        self.last_seen = -100
+        self.running = False
+        self.locale = "zh-CN"
+        self.theme = {"available": False}
+        self.content_revision = 0
+        self.playback = {"state": "idle", "position": 0, "duration": 0, "speed": 1,
+                         "offset": 0, "volume": 1, "index": -1, "timestamp": 0}
+        self.commands = []
+        self.next_command = 0
+
+    @property
+    def connected(self):
+        return self.session is not None and self.clock() - self.last_seen < 4
+
+    def content(self):
+        return {"settings": self.settings, "track": self.track if self.connected else None,
+                "lines": self.lines if self.connected else [], "locale": self.locale,
+                "theme": self.theme, "running": self.running or self.connected,
+                "pluginConnected": self.connected}
+
+    def exchange(self, data):
+        # Validate the whole message before mutating state.
+        if data.get("protocol") != 1 or not isinstance(data.get("session"), str) or not 1 <= len(data["session"]) <= 128:
+            raise ValueError("unsupported protocol or session")
+        raw_playback = data.get("playback")
+        if not isinstance(raw_playback, dict):
+            raise ValueError("invalid playback")
+        revision = data.get("lyricRevision")
+        if not isinstance(revision, int) or revision < 0:
+            raise ValueError("invalid lyric revision")
+        track = normalize_track(data.get("track"))
+        # Older SP plugins still send settings. Import them once on a fresh
+        # installation; Plasma and the saved shared file own all later edits.
+        settings = self.settings
+        import_settings = self.accept_legacy_settings and isinstance(data.get("settings"), dict)
+        if import_settings:
+            settings = validate_settings(data["settings"])
+        lines = normalize_lines(data["lines"]) if "lines" in data else None
+        playback = {key: finite(raw_playback.get(key), value) for key, value in self.playback.items() if key != "state"}
+        playback["position"] = max(0, playback["position"])
+        playback["duration"] = max(0, playback["duration"])
+        playback["speed"] = max(0, min(8, playback["speed"]))
+        playback["volume"] = max(0, min(1, playback["volume"]))
+        playback["state"] = raw_playback.get("state") if raw_playback.get("state") in ("playing", "paused", "idle", "stopped", "loading") else "idle"
+        ack = data.get("ack", [])
+        if not isinstance(ack, list) or len(ack) > 1024:
+            raise ValueError("invalid acknowledgements")
+        previous = copy.deepcopy(self.content())
+        new_session = data["session"] != self.session
+        previous_track = self.track
+        if new_session:
+            self.commands.clear()
+            self.lines = []
+            self.lyric_revision = -1
+        self.session = data["session"]
+        self.last_seen = self.clock()
+        self.track = track
+        if previous_track and track and any(previous_track[k] != track[k] for k in ("id", "source", "path")):
+            self.lines = []
+            self.lyric_revision = -1
+        if lines is not None:
+            self.lines = lines
+            self.lyric_revision = revision
+        self.settings = settings
+        if import_settings:
+            self.accept_legacy_settings = False
+        self.playback = playback
+        self.locale = str(data.get("locale", "zh-CN"))[:32]
+        now = self.clock()
+        self.commands = [c for c in self.commands if c["id"] not in ack and now - c["created"] < 3]
+        if previous != self.content():
+            self.content_revision += 1
+        return {"protocol": 1, "locale": self.locale, "needLines": self.lyric_revision != revision,
+                "commands": [{k: v for k, v in c.items() if k != "created"} for c in self.commands]}
+
+    def command(self, action, value=None):
+        if action not in ("prev", "next", "toggle", "seek", "volume"):
+            raise ValueError("unknown command")
+        if not self.connected:
+            raise ValueError("plugin disconnected")
+        if action in ("seek", "volume"):
+            if finite(value, None) is None:
+                raise ValueError("invalid command value")
+            value = max(0, min(value, self.playback["duration"] or value)) if action == "seek" else max(-1, min(1, value))
+        if len(self.commands) >= 128:
+            raise ValueError("command queue full")
+        self.next_command += 1
+        self.commands.append({"id": self.next_command, "action": action, "value": value, "created": self.clock()})
+        return self.next_command

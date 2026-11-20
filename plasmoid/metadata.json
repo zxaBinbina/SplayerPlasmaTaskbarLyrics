@@ -1,0 +1,25 @@
+{
+  "KPlugin": {
+    "Id": "org.kde.plasma.sptl",
+    "Name": "SPTL — SPlayer Taskbar Lyrics",
+    "Name[zh_CN]": "SPTL — SPlayer 任务栏歌词",
+    "Description": "Synchronized SPlayer Next lyrics, artwork and playback controls",
+    "Description[zh_CN]": "SPlayer Next 同步歌词、封面和播放控制",
+    "Icon": "multimedia-player",
+    "Version": "0.1.0",
+    "License": "AGPL-3.0-only",
+    "Category": "Multimedia",
+    "Authors": [
+      {
+        "Name": "zxaBinbina"
+      }
+    ],
+    "Website": "https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics"
+  },
+  "KPackageStructure": "Plasma/Applet",
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "X-Plasma-FormFactors": [
+    "desktop",
+    "horizontal"
+  ]
+}
