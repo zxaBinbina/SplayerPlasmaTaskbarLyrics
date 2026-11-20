@@ -46,7 +46,7 @@ Item {
     readonly property real widthLimit: !collapsed && bridge.settings.widthMode === "auto" ? bridge.settings.maxWidth : Infinity
     readonly property real visualWidth: bridge.hidden ? 0 : Math.min(animatedWidth, widthLimit)
     // Plasma's fit-content panel resizes its window whenever these hints change.
-    // Only that mode reserves space once and animates the inner content row.
+    // Only that mode reserves space once; content uses the full reserved slot.
     // Other panels keep the original animation of the widget's layout width.
     readonly property real layoutWidth: bridge.hidden ? 0 :
         fitContentPanel ? Math.min(reservedWidth, widthLimit) : visualWidth
@@ -110,11 +110,7 @@ Item {
     }
     RowLayout {
         objectName: "taskbarContent"
-        width: Math.max(0, (root.fitContentPanel ? Math.min(root.width, root.visualWidth) : root.width) - 8 * root.panelScale)
-        anchors.left: !root.fitContentPanel || bridge.settings.coverPosition !== "right" ? parent.left : undefined
-        anchors.right: !root.fitContentPanel || bridge.settings.coverPosition === "right" ? parent.right : undefined
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
+        anchors.fill: parent
         anchors.leftMargin: 4 * root.panelScale
         anchors.rightMargin: 4 * root.panelScale
         anchors.topMargin: root.verticalPadding
@@ -178,7 +174,10 @@ Item {
             enabled: root.showControls
             clip: true
             opacity: root.controlsProgress
-            Layout.preferredWidth: controlsBar.implicitWidth * root.controlsProgress
+            // Fit-content panels already reserved this space. Keep all buttons
+            // at the slot edge while fading, instead of squeezing the lyric row.
+            Layout.minimumWidth: root.fitContentPanel ? controlsBar.implicitWidth : 0
+            Layout.preferredWidth: controlsBar.implicitWidth * (root.fitContentPanel ? 1 : root.controlsProgress)
             Layout.preferredHeight: controlsBar.implicitHeight
             Layout.alignment: Qt.AlignVCenter
             Controls {

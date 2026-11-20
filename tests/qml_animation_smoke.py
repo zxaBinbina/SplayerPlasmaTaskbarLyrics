@@ -152,6 +152,35 @@ Window {{
     artwork = window.findChild(QObject, "artwork")
     timed = window.findChild(QObject, "timed")
     lyrics = popup.findChild(QObject, "fullLyricsList")
+    content = panel.findChild(QObject, "taskbarContent")
+    lyric_area = panel.findChild(QObject, "lyricArea")
+    controls = panel.findChild(QObject, "taskbarControls")
+
+    def assert_fit_content_space():
+        """Use the whole allocated slot and keep all three buttons at its edge."""
+        scale = panel.property("panelScale")
+        slot_left = panel.mapToScene(QPointF(4 * scale, 0)).x()
+        slot_right = panel.mapToScene(QPointF(panel.property("width") - 4 * scale, 0)).x()
+        content_left = content.mapToScene(QPointF(0, 0)).x()
+        content_right = content.mapToScene(QPointF(content.property("width"), 0)).x()
+        assert abs(content_left - slot_left) <= 0.5 and abs(content_right - slot_right) <= 0.5, (
+            f"unused reserved space: content=({content_left}, {content_right}), "
+            f"slot=({slot_left}, {slot_right})"
+        )
+        container = controls.parentItem()
+        buttons_visible = container.isVisible()
+        if buttons_visible:
+            assert container.property("width") >= controls.property("width") - 0.5, "buttons must fit throughout the fade"
+            control_left = controls.mapToScene(QPointF(0, 0)).x()
+            control_right = controls.mapToScene(QPointF(controls.property("width"), 0)).x()
+            right_cover = expression(bridge, 'settings.coverPosition === "right"')
+            edge, slot_edge = (control_left, slot_left) if right_cover else (control_right, slot_right)
+            assert abs(edge - slot_edge) <= 0.5, "controls must stay at the allocated slot edge"
+        expected_lyric_width = slot_right - slot_left - panel.property("coverSize") - content.property("spacing")
+        if buttons_visible:
+            expected_lyric_width -= controls.property("width") + content.property("spacing")
+        assert lyric_area.property("width") >= expected_lyric_width - 1, "reserved space must remain available for lyrics"
+
     try:
         pump(250)
         assert panel.property("fitContentPanel")
@@ -179,6 +208,8 @@ Window {{
         assert 0 < panel.property("controlsProgress") < 1
         assert start_width < panel.property("visualWidth") < panel.property("targetWidth")
         assert panel.property("layoutWidth") == panel.property("targetWidth")
+        window.grabWindow().save(str(ROOT / "artifacts/qml-fit-content-hover.png"))
+        assert_fit_content_space()
         reserved_changes = window.property("panelResizeCount")
         pump(80)
         assert window.property("panelResizeCount") == reserved_changes, "animation frames must not resize the panel"
@@ -201,6 +232,51 @@ Window {{
             f"layout={panel.property('layoutWidth')}, target={panel.property('targetWidth')}, "
             f"visual={panel.property('visualWidth')}"
         )
+
+        # Sudden long lyrics must immediately use the new slot. Hovering a
+        # shorter song title then shrinks it, without pushing controls inwards.
+        long_text = "突然出现的一句非常长的歌词，需要使用任务栏已经预留出来的全部空间" * 2
+        long_lines = [dict(line, translatedLyric="短译") for line in lines]
+        long_lines[1] = dict(long_lines[1], text=long_text,
+                             words=[dict(word=long_text, startTime=2000, endTime=4000)])
+        for cover_position in ("left", "right"):
+            expression(bridge, f'lines = {json.dumps(long_lines, ensure_ascii=False)}; currentIndex = 0; '
+                       'track = ({title: "短歌", artists: "歌手"}); '
+                       f'settings = Object.assign({{}}, settings, {{auxiliary: "translation", coverPosition: "{cover_position}"}})')
+            QTest.mouseMove(window, QPoint(760, 620))
+            pump(250)
+            start_width = panel.property("layoutWidth")
+            expression(bridge, "currentIndex = 1")
+            pump()
+            assert panel.property("targetWidth") > start_width
+            assert panel.property("layoutWidth") == panel.property("targetWidth")
+            assert primary.property("text") == long_text
+            assert_fit_content_space()
+            if cover_position == "left":
+                window.grabWindow().save(str(ROOT / "artifacts/qml-fit-content-long-lyric.png"))
+            reserved_changes = window.property("panelResizeCount")
+            pump(80)
+            assert_fit_content_space()
+            assert window.property("panelResizeCount") == reserved_changes
+            until(lambda: panel.property("visualWidth") == panel.property("targetWidth"))
+
+            QTest.mouseMove(window, QPoint(80, 40))
+            pump()
+            assert 0 < panel.property("controlsProgress") < 1
+            assert panel.property("targetWidth") < panel.property("layoutWidth")
+            assert_fit_content_space()
+            reserved_changes = window.property("panelResizeCount")
+            pump(80)
+            assert_fit_content_space()
+            assert window.property("panelResizeCount") == reserved_changes
+            until(lambda: panel.property("layoutWidth") == panel.property("targetWidth"))
+            assert_fit_content_space()
+
+        QTest.mouseMove(window, QPoint(760, 620))
+        expression(bridge, f'lines = {json.dumps(lines, ensure_ascii=False)}; currentIndex = 3; '
+                   'track = ({title: "很长的歌曲名称，需要更多空间来显示歌曲信息", artists: "演示歌手"}); '
+                   'settings = Object.assign({}, settings, {auxiliary: "off", coverPosition: "left"})')
+        pump(250)
 
         # Fill-width and custom panels retain the original per-frame slot motion.
         for mode in (0, 2):
@@ -253,6 +329,7 @@ Window {{
         assert panel.property("layoutWidth") <= 180, "maximum width must apply during a resize"
         expression(bridge, 'settings = Object.assign({}, settings, {coverPosition: "right"})')
         pump(250)
+        assert_fit_content_space()
         controls = panel.findChild(QObject, "taskbarControls")
         toggle = next(c for c in controls.findChildren(QObject) if c.property("commandAction") == "toggle")
         point = toggle.mapToScene(QPointF(toggle.property("width") / 2, toggle.property("height") / 2))

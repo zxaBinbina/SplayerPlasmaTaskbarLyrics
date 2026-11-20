@@ -1,4 +1,4 @@
-# SplayerPlasmaTaskbarLyrics
+# Splayer Plasma Taskbar Lyrics
 
 简称 **SPTL**。通过 SPlayer Next 官方插件 API、Python 辅助服务和 KDE Plasma 小部件，
 显示同步歌词、歌曲封面及播放控制。采用 **AGPL-3.0-only**。
