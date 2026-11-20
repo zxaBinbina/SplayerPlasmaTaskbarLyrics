@@ -104,6 +104,12 @@
     "max": 1200
   },
   {
+    "key": "hoverFavoriteEnabled",
+    "type": "switch",
+    "label": "悬停时显示收藏按钮 / Show favorite button on hover",
+    "default": true
+  },
+  {
     "key": "clickAction",
     "type": "select",
     "label": "点击主体 / Body click",

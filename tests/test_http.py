@@ -18,11 +18,14 @@ class FakeEnvironment:
     theme = {"available": True, "mode": "dark", "accent": "#123456"}
     locale = None
     launched = 0
+    favorite = {"available": True, "liked": False}
+    favorite_clicks = 0
     def __init__(self):
         self.ready = threading.Event()
     def refresh(self): self.ready.set()
     def local_cover(self, cover): return None
     def activate(self): self.launched += 1
+    def toggle_favorite(self): self.favorite_clicks += 1
 
 
 class HttpTests(unittest.TestCase):
@@ -74,6 +77,37 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.env.launched, 1)
         self.assertEqual(self.request("POST", "/exchange", [1, 2])[0], 400)
         self.assertEqual(self.request("POST", "/command", {"token": state["token"], "action": "unknown"})[0], 400)
+
+    def test_favorite_uses_sp_and_rejects_stale_or_unauthorized_clicks(self):
+        self.request("POST", "/exchange", snapshot())
+        _, state = self.request("GET", "/state")
+        value = {key: state["content"]["track"][key] for key in ("id", "source", "path")}
+        body = {"token": state["token"], "action": "favorite", "value": value}
+        self.assertEqual(self.request("POST", "/command", dict(body, token="wrong"))[0], 403)
+        self.assertEqual(self.request("POST", "/command", dict(body, value=dict(value, id="old")))[0], 400)
+        self.assertEqual(self.env.favorite_clicks, 0)
+        self.assertEqual(self.request("POST", "/command", body)[0], 200)
+        self.assertEqual(self.env.favorite_clicks, 1)
+        self.assertEqual(self.server.state.commands, [], "favorites use SP's source-aware tray action")
+        with patch.object(self.env, "toggle_favorite", side_effect=ValueError("tray unavailable")):
+            self.assertEqual(self.request("POST", "/command", body)[0], 400)
+
+    def test_favorite_dbus_does_not_block_playback_snapshots(self):
+        self.request("POST", "/exchange", snapshot())
+        _, state = self.request("GET", "/state")
+        value = {key: state["content"]["track"][key] for key in ("id", "source", "path")}
+        started, release = threading.Event(), threading.Event()
+        def delayed(): started.set(); release.wait(3)
+        self.env.toggle_favorite = delayed
+        worker = threading.Thread(target=lambda: self.request("POST", "/command", {
+            "token": state["token"], "action": "favorite", "value": value}))
+        worker.start()
+        try:
+            self.assertTrue(started.wait(1))
+            self.assertEqual(self.request("GET", "/state")[0], 200)
+        finally:
+            release.set()
+            worker.join()
     def test_shared_settings_persist_without_sp_running(self):
         with tempfile.TemporaryDirectory() as directory:
             settings_file = Path(directory) / "settings.json"

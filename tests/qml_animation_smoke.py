@@ -92,12 +92,19 @@ Window {{
         property color accent: "#fe7971"
         property color background: "#202124"
         property string lastError: ""
+        property string actionError: ""
+        property bool modeAvailable: true
+        property bool favoriteAvailable: true
+        property bool favoriteLiked: false
+        property bool queueLoading: false
+        property var queue: ({{available: true, tracks: [], total: 0, currentIndex: -1, offset: 0, requestId: 0, error: ""}})
         property string coverSource: "{image_url}/good.png"
         readonly property int motionDuration: settings.animationsEnabled ? 200 : 0
         readonly property int quickDuration: settings.animationsEnabled ? 100 : 0
         function tr(zh, en) {{ return zh; }}
         function statusText() {{ return "SPlayer Next"; }}
         function command(action, value) {{}}
+        function requestQueue(offset) {{}}
     }}
     RowLayout {{
         id: fitPanel; x: 20; y: 20; width: implicitWidth; height: 42
@@ -175,7 +182,11 @@ Window {{
             control_right = controls.mapToScene(QPointF(controls.property("width"), 0)).x()
             right_cover = expression(bridge, 'settings.coverPosition === "right"')
             edge, slot_edge = (control_left, slot_left) if right_cover else (control_right, slot_right)
-            assert abs(edge - slot_edge) <= 0.5, "controls must stay at the allocated slot edge"
+            assert abs(edge - slot_edge) <= 0.5, (
+                f"controls must stay at the allocated slot edge: edge={edge}, slot={slot_edge}, "
+                f"container={container.property('width')}, bar={controls.property('width')}, "
+                f"cover={panel.property('coverSize')}, lyric={lyric_area.property('width')}"
+            )
         expected_lyric_width = slot_right - slot_left - panel.property("coverSize") - content.property("spacing")
         if buttons_visible:
             expected_lyric_width -= controls.property("width") + content.property("spacing")

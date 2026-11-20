@@ -142,6 +142,36 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(lines[2]["text"], "Kara")
         self.assertEqual(lines[2]["romanLyric"], "Roman")
 
+    def test_mode_queue_roundtrip_and_stale_selection(self):
+        data = snapshot()
+        data["modeAvailable"] = True
+        data["playback"].update(repeat="one", shuffle="on")
+        data["queue"] = dict(available=True, tracks=[data["track"]], total=1, currentIndex=0, offset=0, requestId=10)
+        self.state.exchange(data)
+        self.assertEqual(self.state.playback["repeat"], "one")
+        self.assertEqual(self.state.playback["shuffle"], "on")
+        self.state.command("mode", "list")
+        self.state.command("queue", -1)
+        self.state.command("queuePlay", {"index": 0, "id": "one", "source": "", "path": ""})
+        for action, value in (("mode", "bad"), ("queue", True), ("queue", -2),
+                              ("queuePlay", {"index": 0, "id": "another"})):
+            with self.assertRaises(ValueError): self.state.command(action, value)
+        before = self.state.content()
+        data["queue"]["tracks"] = [None]
+        with self.assertRaises(ValueError): self.state.exchange(data)
+        self.assertEqual(self.state.content(), before)
+
+    def test_legacy_plugin_and_reconnect_clear_extended_controls(self):
+        data = snapshot()
+        data["queue"] = dict(available=True, tracks=[data["track"]], total=1, currentIndex=0, offset=0)
+        data["modeAvailable"] = True
+        self.state.exchange(data)
+        self.now = 5
+        self.assertFalse(self.state.content()["queue"]["available"])
+        self.state.exchange(snapshot() | {"session": "legacy"})
+        self.assertFalse(self.state.content()["queue"]["available"])
+        self.assertFalse(self.state.mode_available)
+
 
 class StorageTests(unittest.TestCase):
     def test_wal_latest_sequence_and_deletion(self):

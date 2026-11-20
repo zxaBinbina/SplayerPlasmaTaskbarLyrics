@@ -4,6 +4,7 @@
 - `plugin/runtime.js`：构建为官方可导入的独立 JS 脚本。
   API 级别 4，声明 network/control；接收 trackChange、lyricChange、lineChange、
   playStateChange，并每 300 ms 查询 getNowPlaying/getStatus。
+  播放模式使用 setPlayMode；按需检测 API 5 的 getQueue，旧宿主保留其他功能。
 - `helper/sptl/`：Python 3.10+ 标准库 HTTP 服务。只绑定 IPv4 loopback，
   统一共享配置、连接状态、主题和本地封面；systemd 用户服务负责重启。
 - `plasmoid/contents/ui/`：共用 QML 组件。独立 Plasma 5/6 入口和包元数据，
@@ -12,7 +13,8 @@
 ## 协议 v1
 
 SP 插件 POST `/exchange`：session、locale、track、playback、
-lyricRevision；歌词变化或连接恢复时附带 lines。响应包含 needLines 和待执行 commands。
+lyricRevision、播放模式能力、队列分页和命令错误；歌词变化或连接恢复时附带 lines。
+响应包含 needLines 和待执行 commands。
 每个命令有 ID，插件执行后回传 ack；HTTP 响应丢失会重复投递相同 ID，
 插件在执行前记录 ID，防止重复切歌。命令 3 秒过期，断开或新 session 会清空。
 这是有界去重机制；插件崩溃瞬间的命令不作跨进程重放。
@@ -23,7 +25,18 @@ lyricRevision；歌词变化或连接恢复时附带 lines。响应包含 needLi
 QML 每 33 ms 按时间戳插值，暂停状态不插值，歌词时间为 position + offset。
 歌词点击跳转减去 offset；进度条使用歌曲播放时间。
 
-POST `/command` 的启动／唤起由辅助程序执行，其他控制投递给 SP 插件。
+POST `/command` 的启动／唤起和收藏由辅助程序执行，其他控制投递给 SP 插件。
+收藏通过 `tray.py` 读取经过身份核对的 SP StatusNotifierItem 的 DBusMenu，
+从中英文字段读取真实收藏状态，每次点击前重新解析菜单 ID，触发 SP 自身的收藏操作；
+不写入歌曲数据库，不绕过 SP 的来源分发或登录逻辑。托盘不可用时按钮禁用。
+收藏请求包含曲目标识，避免旧界面的点击作用于已经切换的歌曲；D-Bus 操作不持有 HTTP 状态锁。
+
+弹窗中的播放列表按 50 首分页读取，首次定位当前曲目所在页，可刷新、翻页和点击播放。
+打开列表时每 2 秒刷新当前页，内容未变时保留手动滚动位置；队列缩短时回退到有效页面。
+选择歌曲时，辅助程序和插件分别核对索引与歌曲标识，插件读取最新完整 Track 后交给 playTrack，
+避免过期队列点击播放另一首歌。列表读取失败不影响歌词轮询，失败命令仍确认并显示错误。
+关闭弹窗停止列表刷新；返回歌词恢复跟随。悬停收藏开关独立于弹窗收藏，
+三／四个悬停按钮的宽度均计入任务栏尺寸和缩放，保留适合内容模式的宽度稳定规则。
 GET `/cover` 提供当前歌曲位于 SP covers 缓存目录内的图片，
 以及当前 SP MPRIS 发布的 streaming-cover 临时图片，不接受文件路径参数。
 POST `/settings` 接收配置窗口已应用的设置补丁，校验并原子保存后更新内容版本。

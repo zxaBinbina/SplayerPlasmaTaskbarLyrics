@@ -5,6 +5,8 @@ Row {
     id: root
     property var bridge
     property real sizeScale: 1
+    property bool showFavorite: false
+    readonly property real baseWidth: showFavorite ? 118 : 88
     spacing: 2 * sizeScale
     ControlButton {
         bridge: root.bridge
@@ -26,5 +28,11 @@ Row {
         iconName: "media-skip-forward"
         commandAction: "next"
         text: bridge.tr("下一首", "Next")
+    }
+    FavoriteButton {
+        objectName: "hoverFavoriteButton"
+        bridge: root.bridge
+        sizeScale: root.sizeScale
+        visible: root.showFavorite
     }
 }

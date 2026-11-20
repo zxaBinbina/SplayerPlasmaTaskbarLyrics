@@ -8,6 +8,8 @@ QQC.ToolButton {
     property real sizeScale: 1
     property string iconName: ""
     property string commandAction: ""
+    property var commandValue
+    readonly property color glyphColor: checked ? bridge.accent : bridge.foreground
     implicitWidth: 28 * sizeScale
     implicitHeight: 28 * sizeScale
     hoverEnabled: true
@@ -31,7 +33,12 @@ QQC.ToolButton {
                 ctx.clearRect(0, 0, width, height);
                 ctx.save();
                 ctx.scale(root.sizeScale, root.sizeScale);
-                ctx.fillStyle = root.bridge.foreground;
+                ctx.fillStyle = root.glyphColor;
+                ctx.strokeStyle = root.glyphColor;
+                ctx.lineWidth = 1.6;
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+                var fillGlyph = true;
                 ctx.beginPath();
                 if (root.iconName === "media-playback-pause") {
                     ctx.rect(4, 3, 3, 12); ctx.rect(11, 3, 3, 12);
@@ -41,15 +48,48 @@ QQC.ToolButton {
                 } else if (root.iconName === "media-skip-forward") {
                     ctx.moveTo(4, 3); ctx.lineTo(13, 9); ctx.lineTo(4, 15); ctx.closePath();
                     ctx.rect(13, 3, 2, 12);
+                } else if (root.iconName === "favorite") {
+                    ctx.moveTo(9, 15);
+                    ctx.bezierCurveTo(7, 13, 2, 9.5, 2, 6);
+                    ctx.bezierCurveTo(2, 1.5, 7, 1.5, 9, 5);
+                    ctx.bezierCurveTo(11, 1.5, 16, 1.5, 16, 6);
+                    ctx.bezierCurveTo(16, 9.5, 11, 13, 9, 15);
+                    ctx.closePath();
+                    fillGlyph = root.checked;
+                } else if (root.iconName === "playlist") {
+                    ctx.moveTo(2, 4); ctx.lineTo(15, 4);
+                    ctx.moveTo(2, 8); ctx.lineTo(11, 8);
+                    ctx.moveTo(2, 12); ctx.lineTo(9, 12);
+                    ctx.moveTo(13, 9); ctx.lineTo(17, 12); ctx.lineTo(13, 15); ctx.closePath();
+                    fillGlyph = false;
+                } else if (root.iconName === "shuffle") {
+                    ctx.moveTo(2, 4); ctx.lineTo(5, 4); ctx.lineTo(12, 14); ctx.lineTo(16, 14);
+                    ctx.moveTo(2, 14); ctx.lineTo(5, 14); ctx.lineTo(12, 4); ctx.lineTo(16, 4);
+                    ctx.moveTo(13.5, 1.5); ctx.lineTo(16, 4); ctx.lineTo(13.5, 6.5);
+                    ctx.moveTo(13.5, 11.5); ctx.lineTo(16, 14); ctx.lineTo(13.5, 16.5);
+                    fillGlyph = false;
+                } else if (root.iconName === "repeat" || root.iconName === "repeat-one") {
+                    ctx.moveTo(4, 4); ctx.lineTo(13, 4); ctx.quadraticCurveTo(16, 4, 16, 8);
+                    ctx.moveTo(11, 1.5); ctx.lineTo(13.5, 4); ctx.lineTo(11, 6.5);
+                    ctx.moveTo(14, 14); ctx.lineTo(5, 14); ctx.quadraticCurveTo(2, 14, 2, 10);
+                    ctx.moveTo(7, 11.5); ctx.lineTo(4.5, 14); ctx.lineTo(7, 16.5);
+                    if (root.iconName === "repeat-one") {
+                        ctx.font = "bold 9px sans-serif";
+                        ctx.textAlign = "center";
+                        ctx.fillText("1", 9, 12);
+                    }
+                    fillGlyph = false;
                 } else {
                     ctx.moveTo(5, 3); ctx.lineTo(14, 9); ctx.lineTo(5, 15); ctx.closePath();
                 }
-                ctx.fill();
+                if (fillGlyph) ctx.fill(); else ctx.stroke();
                 ctx.restore();
             }
             Connections {
                 target: root
                 function onIconNameChanged() { glyph.requestPaint(); }
+                function onGlyphColorChanged() { glyph.requestPaint(); }
+                function onCheckedChanged() { glyph.requestPaint(); }
             }
             Connections {
                 target: root.bridge
@@ -71,6 +111,6 @@ QQC.ToolButton {
     }
     QQC.ToolTip.visible: hovered
     QQC.ToolTip.text: text
-    onClicked: bridge.command(commandAction)
+    onClicked: { if (commandAction) bridge.command(commandAction, commandValue); }
     Accessible.name: text
 }

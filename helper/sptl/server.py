@@ -49,6 +49,7 @@ class BridgeServer(ThreadingHTTPServer):
                     before = copy.deepcopy(self.state.content())
                     self.state.running = self.environment.running
                     self.state.theme = dict(self.environment.theme)
+                    self.state.favorite = dict(getattr(self.environment, "favorite", {"available": False, "liked": False}))
                     if self.environment.locale:
                         self.state.locale = self.environment.locale
                     if before != self.state.content():
@@ -198,8 +199,20 @@ class Handler(BaseHTTPRequestHandler):
                     if action in ("launch", "open"):
                         self.server.environment.activate()
                         return self.respond(200, {"ok": True})
-                    command_id = self.server.state.command(action, data.get("value"))
-                    return self.respond(200, {"id": command_id})
+                    if action == "favorite":
+                        state = self.server.state
+                        value = data.get("value")
+                        if not state.connected or not state.track or not isinstance(value, dict) or any(
+                            value.get(key, "") != state.track[key] for key in ("id", "source", "path")
+                        ):
+                            raise ValueError("favorite track is stale")
+                    else:
+                        command_id = self.server.state.command(action, data.get("value"))
+                        return self.respond(200, {"id": command_id})
+            if parsed.path == "/command" and action == "favorite":
+                # D-Bus must not block playback snapshots behind the state lock.
+                self.server.environment.toggle_favorite()
+                return self.respond(200, {"ok": True})
             return self.respond(404, {"error": "not found"})
         except (ValueError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})

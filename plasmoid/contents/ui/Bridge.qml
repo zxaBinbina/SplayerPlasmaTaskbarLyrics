@@ -26,6 +26,18 @@ Item {
     readonly property int quickDuration: settings.animationsEnabled === false ? 0 : Kirigami.Units.shortDuration
     readonly property var track: content.track
     readonly property var lines: content.lines
+    readonly property var queue: content.queue || ({available: false, tracks: [], total: 0, currentIndex: -1, offset: 0, requestId: 0, error: ""})
+    readonly property bool modeAvailable: content.modeAvailable === true
+    readonly property bool favoriteAvailable: !!content.favorite && content.favorite.available === true
+    readonly property bool favoriteLiked: !!content.favorite && content.favorite.liked === true
+    readonly property string actionError: content.commandError === "queue_changed" ?
+        tr("播放列表已改变，请刷新后重试", "The playlist changed; refresh and try again") :
+        content.commandError === "queue_unavailable" ? tr("此版本 SP 不支持读取播放列表", "This SP version cannot read the playlist") :
+        content.commandError === "control_failed" ? tr("SP 操作失败，请重试", "SP action failed; try again") : ""
+    property bool queueLoading: false
+    property double queueRequestedAt: 0
+    readonly property int queueResponseId: queue.requestId || 0
+    onQueueResponseIdChanged: queueLoading = false
     readonly property bool running: reachable && content.running
     readonly property bool connected: reachable && content.pluginConnected
     readonly property bool playing: connected && playback.state === "playing"
@@ -95,6 +107,7 @@ Item {
         var request = new XMLHttpRequest();
         request.onreadystatechange = function() {
             if (request.readyState === XMLHttpRequest.DONE) {
+                if (action === "queue" && request.status !== 200) queueLoading = false;
                 lastError = request.status === 200 ? "" :
                     tr("操作失败，请检查 SP 与辅助程序", "Action failed; check SP and the bridge");
             }
@@ -103,6 +116,12 @@ Item {
         request.setRequestHeader("Content-Type", "application/json");
         request.setRequestHeader("X-SPTL-Client", "plasma");
         request.send(JSON.stringify({ token: token, action: action, value: value === undefined ? null : value }));
+    }
+    function requestQueue(offset) {
+        if (!connected || queueLoading) return;
+        queueLoading = true;
+        queueRequestedAt = Date.now();
+        command("queue", offset === undefined ? -1 : offset);
     }
     function saveSettings(changes, callback) {
         if (!reachable || !token || savingSettings) return false;
@@ -126,6 +145,7 @@ Item {
         interval: 500; running: true; repeat: true
         onTriggered: {
             bridge.poll();
+            if (bridge.queueLoading && Date.now() - bridge.queueRequestedAt > 6000) bridge.queueLoading = false;
             if (Date.now() - bridge.lastSuccess > 5000) {
                 bridge.reachable = false;
                 bridge.revision = -1;

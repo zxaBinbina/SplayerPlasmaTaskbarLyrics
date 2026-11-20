@@ -6,6 +6,8 @@
 已实现第一版原型：双行原文＋翻译／音译／下一句、单行歌词＋歌曲信息、
 逐字高亮与暂停冻结、长文字横向滚动、封面左右切换、自动／固定宽度、
 悬停播放控制、滚轮音量、完整歌词与进度跳转、共享设置及中英文显示。
+歌词弹窗提供播放模式、收藏和当前播放列表；播放列表支持翻页与点击播放。
+悬停区默认增加收藏按钮，可在“交互与离线”设置中关闭“悬停时显示收藏按钮”。
 歌词换行和悬停信息带淡入与轻微上移，控制区渐显、宽度平滑伸缩，
 封面加载后过渡，按钮提供悬停／按下反馈，完整歌词平滑跟随当前句。
 动画速度跟随 KDE 系统设置，也可在小部件配置中关闭“界面动画”。
@@ -15,6 +17,8 @@
 需要 Python 3.10+、SPlayer Next **插件 API 4+**、Plasma 5.27 / Qt 5.15
 或 Plasma 6 / Qt 6，以及 systemd 用户会话。辅助服务只使用 Python 标准库。
 主窗口唤起优先使用 SP 的 MPRIS，启动优先使用已安装的可执行文件或桌面入口。
+播放列表需要 SP 插件 API 5 的队列接口；旧版仍可使用其他功能。
+收藏复用 SP 的 Linux 托盘菜单，需要系统中的 `gdbus` 及 SP 托盘入口。
 
 在项目目录运行：
 
@@ -47,6 +51,7 @@ python3 -m unittest discover -s tests -v
 node tests/plugin.mjs
 python3 tests/qml_smoke.py
 python3 tests/qml_animation_smoke.py
+python3 tests/qml_controls_smoke.py
 python3 tests/package_smoke.py
 python3 tests/install_smoke.py
 ```

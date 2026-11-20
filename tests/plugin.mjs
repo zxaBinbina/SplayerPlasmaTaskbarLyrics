@@ -9,6 +9,10 @@ const events = {}, updates = {}, sent = [], actions = [], timers = [];
 let commands = [], needLines = false, fail = false, registered, responseLocale = "en-US";
 let now = {track: {id:"one", source:"local", title:"Song", artists:[{name:"Singer"}], duration:10000},
            state:"paused", position:2000, speed:1, lyricOffsetMs:100, sendTimestamp:12345};
+let status = {durationMs:10000, volume:0.5, repeat:"list", shuffle:"off", currentIndex:0};
+let queueFailure = false;
+let queueGate = null, queueQueries = 0;
+const queueTracks = Array.from({length:80}, (_, i) => ({...now.track, id:String(i), title:"Song " + i}));
 const splayer = {
   locale:"en-US",
   getSetting: () => undefined,
@@ -18,7 +22,15 @@ const splayer = {
   player: {
     on: (event, handler) => events[event] = handler,
     getNowPlaying: async () => now,
-    getStatus: async () => ({durationMs:10000, volume:0.5}),
+    getStatus: async () => status,
+    setPlayMode: async mode => { status = {...status, ...mode}; actions.push(["mode", {...mode}]); },
+    getQueue: async ({offset, limit}) => {
+      queueQueries++;
+      if (queueGate) await queueGate;
+      if (queueFailure) throw new Error("temporarily unavailable");
+      return {tracks:queueTracks.slice(offset,offset+limit), total:queueTracks.length, currentIndex:status.currentIndex, offset};
+    },
+    playTrack: async track => actions.push(["track", track.id]),
     prev: () => actions.push("prev"), next: () => actions.push("next"),
     play: () => actions.push("play"), pause: () => actions.push("pause"),
     seek: value => actions.push(["seek", value]), setVolume: value => actions.push(["volume",value])
@@ -66,6 +78,69 @@ assert.equal(sent.at(-1).lines.length, 1, "retry after network failure includes 
 responseLocale = "zh-CN"; timers[0](); await flush();
 assert.equal(registered.settings.length, 0);
 assert.equal(registered.events.length, 4, "relocalizing settings retains event registration");
+
+commands = [{id:3,action:"mode",value:"one"}];
+timers[0](); await flush(); timers[0](); await flush();
+assert.equal(sent.at(-1).playback.repeat, "one");
+assert.equal(sent.at(-1).playback.shuffle, "off");
+assert.equal(actions.filter(action => action[0] === "mode").length, 1, "repeated delivery must not repeat mode changes");
+commands = [{id:4,action:"mode",value:"shuffle"}];
+timers[0](); await flush(); timers[0](); await flush();
+assert.equal(sent.at(-1).playback.repeat, "list");
+assert.equal(sent.at(-1).playback.shuffle, "on");
+status.currentIndex = 70;
+commands = [{id:5,action:"queue",value:-1}];
+timers[0](); await flush(); timers[0](); await flush();
+assert.equal(sent.at(-1).queue.offset, 50, "initial page should contain the current track");
+assert.equal(sent.at(-1).queue.tracks.length, 30);
+assert.equal(sent.at(-1).queue.requestId, 5);
+commands = [{id:6,action:"queuePlay",value:{index:70,id:"70",source:"local",path:""}}];
+timers[0](); await flush();
+assert.deepEqual(actions.at(-1), ["track","70"]);
+queueTracks[70] = {...queueTracks[70],id:"replacement"};
+commands = [{id:7,action:"queuePlay",value:{index:70,id:"70",source:"local",path:""}}];
+timers[0](); await flush(); timers[0](); await flush();
+assert.equal(sent.at(-1).commandError, "queue_changed", "stale clicks must not play another song");
+assert.equal(actions.filter(action => action[0] === "track").length, 1);
+queueFailure = true;
+commands = [{id:8,action:"queue",value:0}];
+timers[0](); await flush(); timers[0](); await flush();
+assert.equal(sent.at(-1).queue.requestId, 8);
+assert.equal(sent.at(-1).queue.error, "unavailable");
+assert.ok(sent.at(-1).ack.includes(8), "failed queue queries must be acknowledged without disconnecting playback");
+queueFailure = false;
+commands = [{id:9,action:"queue",value:0}];
+timers[0](); await flush(); timers[0](); await flush();
+assert.equal(sent.at(-1).queue.error, "");
+assert.equal(sent.at(-1).commandError, "");
+assert.equal(sent.at(-1).queue.tracks.length, 50);
+queueTracks.splice(3);
+commands = [{id:10,action:"queue",value:50}];
+timers[0](); await flush(); timers[0](); await flush();
+assert.equal(sent.at(-1).queue.offset, 0, "a shortened playlist must return to an existing page");
+assert.equal(sent.at(-1).queue.tracks.length, 3);
+let releaseQueue;
+queueGate = new Promise(resolve => releaseQueue = resolve);
+commands = [{id:12,action:"queue",value:0}];
+const queriesBefore = queueQueries;
+timers[0](); await flush();
+const sendsBefore = sent.length;
+timers[0](); await flush(); timers[0](); await flush();
+assert.equal(sent.length, sendsBefore + 2, "slow queue IPC must not block playback exchanges");
+assert.equal(queueQueries, queriesBefore + 1, "a pending query must not execute twice");
+assert.ok(!sent.at(-1).ack.includes(12), "a pending query cannot be acknowledged yet");
+releaseQueue(); queueGate = null; await flush();
+timers[0](); await flush();
+assert.equal(sent.at(-1).queue.requestId, 12);
+assert.ok(sent.at(-1).ack.includes(12));
+let legacyTimer;
+commands = [{id:11,action:"queue",value:0}];
+vm.runInNewContext(plugin, {splayer:{...splayer, player:{...splayer.player, getQueue:undefined}},
+  setInterval: callback => legacyTimer = callback, Date, Math, Set});
+await flush(); legacyTimer(); await flush();
+assert.equal(sent.at(-1).queue.available, false, "API 4 hosts retain playback without a queue API");
+assert.equal(sent.at(-1).commandError, "queue_unavailable");
+commands = [];
 
 const logicSource = readFileSync(new URL("plasmoid/contents/ui/Logic.js", root),"utf8").replace(".pragma library","");
 const logic = vm.createContext({});

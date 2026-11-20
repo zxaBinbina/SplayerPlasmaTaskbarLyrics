@@ -158,7 +158,7 @@ QQC.ScrollView {
                 Kirigami.FormData.isSection: true
             }
             Repeater {
-                model: root.settingsFor(["clickAction", "clickLyricSeek", "offlineDisplay", "offlineClick"])
+                model: root.settingsFor(["clickAction", "clickLyricSeek", "hoverFavoriteEnabled", "offlineDisplay", "offlineClick"])
                 delegate: settingDelegate
             }
         }

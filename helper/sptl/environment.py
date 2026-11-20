@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from .local_storage import read_preferences
+from .tray import TrayFavorite
 
 CONFIG_NAMES = ("SPlayer-Next", "splayer-next", "splayer_next")
 MPRIS_PREFIX = "org.mpris.MediaPlayer2.splayer_next"
@@ -25,6 +26,8 @@ class Environment:
         self.bus_name = None
         self.preferences_signature = None
         self.preferences = {}
+        self.tray = TrayFavorite()
+        self.favorite = {"available": False, "liked": False}
 
     def discover(self):
         if self.config_override:
@@ -50,6 +53,7 @@ class Environment:
 
     def refresh(self):
         self.config_path = self.discover()
+        names = ""
         try:
             names = self.dbus("org.freedesktop.DBus.ListNames")
             matches = re.findall(r"'(" + re.escape(MPRIS_PREFIX) + r"[^']*)'", names)
@@ -57,6 +61,8 @@ class Environment:
         except (OSError, subprocess.SubprocessError):
             self.bus_name = None
         self.running = bool(self.bus_name)
+        item = self.tray.inspect(names)
+        self.favorite = {key: item[key] for key in ("available", "liked")}
         if not self.running:
             # MPRIS may be disabled in SP. Inspect only processes owned by this user.
             for proc in Path("/proc").glob("[0-9]*"):
@@ -145,6 +151,9 @@ class Environment:
         except (OSError, ValueError, subprocess.SubprocessError):
             pass
         return None
+
+    def toggle_favorite(self):
+        self.tray.toggle()
 
     def activate(self):
         if self.bus_name:

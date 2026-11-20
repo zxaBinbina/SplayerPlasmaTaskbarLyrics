@@ -11,6 +11,11 @@ SCHEMA = json.loads((Path(__file__).resolve().parents[2] / "shared/settings.json
 DEFAULTS = {item["key"]: item["default"] for item in SCHEMA}
 
 
+def empty_queue():
+    return {"available": False, "tracks": [], "total": 0, "currentIndex": -1,
+            "offset": 0, "requestId": 0, "error": ""}
+
+
 def finite(value, default=0):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else default
 
@@ -82,6 +87,23 @@ def normalize_track(raw):
     }
 
 
+def normalize_queue(raw):
+    if not isinstance(raw, dict) or not isinstance(raw.get("tracks"), list) or len(raw["tracks"]) > 100:
+        raise ValueError("invalid playback queue")
+    result = empty_queue()
+    for key in ("total", "offset", "requestId", "currentIndex"):
+        value = raw.get(key, result[key])
+        if not isinstance(value, int) or isinstance(value, bool) or value < (-1 if key == "currentIndex" else 0):
+            raise ValueError("invalid queue index")
+        result[key] = value
+    result["tracks"] = [normalize_track(track) for track in raw["tracks"]]
+    if any(track is None for track in result["tracks"]):
+        raise ValueError("invalid queue track")
+    result["available"] = raw.get("available") is True
+    result["error"] = "unavailable" if raw.get("error") else ""
+    return result
+
+
 class State:
     def __init__(self, settings=None, clock=time.monotonic):
         self.clock = clock
@@ -95,9 +117,14 @@ class State:
         self.running = False
         self.locale = "zh-CN"
         self.theme = {"available": False}
+        self.favorite = {"available": False, "liked": False}
+        self.queue = empty_queue()
+        self.mode_available = False
+        self.command_error = ""
         self.content_revision = 0
         self.playback = {"state": "idle", "position": 0, "duration": 0, "speed": 1,
-                         "offset": 0, "volume": 1, "index": -1, "timestamp": 0}
+                         "offset": 0, "volume": 1, "index": -1, "timestamp": 0,
+                         "repeat": "list", "shuffle": "off"}
         self.commands = []
         self.next_command = 0
 
@@ -109,6 +136,8 @@ class State:
         return {"settings": self.settings, "track": self.track if self.connected else None,
                 "lines": self.lines if self.connected else [], "locale": self.locale,
                 "theme": self.theme, "running": self.running or self.connected,
+                "favorite": self.favorite, "queue": self.queue if self.connected else empty_queue(),
+                "modeAvailable": self.mode_available, "commandError": self.command_error,
                 "pluginConnected": self.connected}
 
     def exchange(self, data):
@@ -129,7 +158,11 @@ class State:
         if import_settings:
             settings = validate_settings(data["settings"])
         lines = normalize_lines(data["lines"]) if "lines" in data else None
-        playback = {key: finite(raw_playback.get(key), value) for key, value in self.playback.items() if key != "state"}
+        queue = normalize_queue(data["queue"]) if "queue" in data else None
+        playback = {key: finite(raw_playback.get(key), value) for key, value in self.playback.items()
+                    if key not in ("state", "repeat", "shuffle")}
+        playback["repeat"] = "one" if raw_playback.get("repeat") == "one" else "list"
+        playback["shuffle"] = "on" if raw_playback.get("shuffle") == "on" else "off"
         playback["position"] = max(0, playback["position"])
         playback["duration"] = max(0, playback["duration"])
         playback["speed"] = max(0, min(8, playback["speed"]))
@@ -145,6 +178,7 @@ class State:
             self.commands.clear()
             self.lines = []
             self.lyric_revision = -1
+            self.queue = empty_queue()
         self.session = data["session"]
         self.last_seen = self.clock()
         self.track = track
@@ -155,6 +189,11 @@ class State:
             self.lines = lines
             self.lyric_revision = revision
         self.settings = settings
+        if queue is not None:
+            self.queue = queue
+        self.mode_available = data.get("modeAvailable") is True
+        self.command_error = data.get("commandError", "") if data.get("commandError") in (
+            "control_failed", "queue_changed", "queue_unavailable") else ""
         if import_settings:
             self.accept_legacy_settings = False
         self.playback = playback
@@ -167,7 +206,7 @@ class State:
                 "commands": [{k: v for k, v in c.items() if k != "created"} for c in self.commands]}
 
     def command(self, action, value=None):
-        if action not in ("prev", "next", "toggle", "seek", "volume"):
+        if action not in ("prev", "next", "toggle", "seek", "volume", "mode", "queue", "queuePlay"):
             raise ValueError("unknown command")
         if not self.connected:
             raise ValueError("plugin disconnected")
@@ -175,6 +214,20 @@ class State:
             if finite(value, None) is None:
                 raise ValueError("invalid command value")
             value = max(0, min(value, self.playback["duration"] or value)) if action == "seek" else max(-1, min(1, value))
+        if action == "mode" and (not self.mode_available or value not in ("list", "one", "shuffle")):
+            raise ValueError("invalid or unavailable playback mode")
+        if action == "queue" and (not isinstance(value, int) or isinstance(value, bool) or not -1 <= value <= 1000000):
+            raise ValueError("invalid queue offset")
+        if action == "queuePlay":
+            if not isinstance(value, dict) or not isinstance(value.get("index"), int) or isinstance(value["index"], bool):
+                raise ValueError("invalid queue selection")
+            index = value["index"] - self.queue["offset"]
+            if not 0 <= index < len(self.queue["tracks"]) or not self.queue["available"]:
+                raise ValueError("queue selection is stale")
+            track = self.queue["tracks"][index]
+            if any(value.get(key, "") != track[key] for key in ("id", "source", "path")):
+                raise ValueError("queue selection is stale")
+            value = {key: value.get(key, "") for key in ("index", "id", "source", "path")}
         if len(self.commands) >= 128:
             raise ValueError("command queue full")
         self.next_command += 1

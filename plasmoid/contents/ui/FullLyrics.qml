@@ -8,6 +8,8 @@ Rectangle {
     id: root
     property var bridge
     property bool following: true
+    property bool playlistShown: false
+    readonly property string playbackMode: Logic.playMode(bridge.playback)
     implicitWidth: 480
     implicitHeight: 560
     Layout.minimumWidth: 320
@@ -17,7 +19,7 @@ Rectangle {
     color: bridge.background
     radius: 10
     function follow(immediate) {
-        if (!visible || !following || bridge.currentIndex < 0 || !lyrics.count) return;
+        if (!visible || playlistShown || !following || bridge.currentIndex < 0 || !lyrics.count) return;
         scrollMotion.stop();
         var previous = lyrics.contentY;
         lyrics.positionViewAtIndex(bridge.currentIndex, ListView.Center);
@@ -44,7 +46,16 @@ Rectangle {
     }
     onVisibleChanged: {
         if (visible) { following = true; Qt.callLater(function() { root.follow(true); }); }
-        else { scrollMotion.stop(); resume.stop(); }
+        else { scrollMotion.stop(); resume.stop(); playlistShown = false; }
+    }
+    onPlaylistShownChanged: {
+        if (playlistShown) { scrollMotion.stop(); bridge.requestQueue(); }
+        else Qt.callLater(function() { root.follow(true); });
+    }
+    Timer {
+        interval: 2000; repeat: true
+        running: root.visible && root.playlistShown && bridge.connected
+        onTriggered: bridge.requestQueue(bridge.queue.offset)
     }
     Timer { id: resume; interval: 4000; onTriggered: { root.following = true; root.follow(); } }
     ColumnLayout {
@@ -83,6 +94,7 @@ Rectangle {
         ListView {
             id: lyrics
             objectName: "fullLyricsList"
+            visible: !root.playlistShown
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -150,10 +162,17 @@ Rectangle {
                 wrapMode: Text.Wrap
             }
         }
+        PlaybackQueue {
+            objectName: "playbackQueue"
+            bridge: root.bridge
+            visible: root.playlistShown
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
         Text {
             Layout.fillWidth: true
-            visible: bridge.lastError.length > 0
-            text: bridge.lastError
+            visible: text.length > 0
+            text: bridge.lastError || bridge.actionError
             color: bridge.accent
             textFormat: Text.PlainText
             wrapMode: Text.Wrap
@@ -171,7 +190,49 @@ Rectangle {
             Layout.fillWidth: true
             Text { text: Logic.formatTime(progress.value); color: bridge.secondary }
             Item { Layout.fillWidth: true }
-            Controls { bridge: root.bridge }
+            ControlButton {
+                id: modeButton
+                objectName: "playbackModeButton"
+                bridge: root.bridge
+                iconName: root.playbackMode === "shuffle" ? "shuffle" : root.playbackMode === "one" ? "repeat-one" : "repeat"
+                checked: root.playbackMode !== "list"
+                enabled: bridge.connected && !!bridge.track && bridge.modeAvailable
+                text: bridge.tr("播放模式：", "Playback mode: ") + (root.playbackMode === "shuffle" ? bridge.tr("随机播放", "Shuffle") :
+                    root.playbackMode === "one" ? bridge.tr("单曲循环", "Repeat one") : bridge.tr("列表循环", "Repeat all"))
+                onClicked: modeMenu.popup()
+                QQC.Menu {
+                    id: modeMenu
+                    objectName: "playbackModeMenu"
+                    QQC.MenuItem {
+                        objectName: "mode_list"
+                        text: bridge.tr("列表循环", "Repeat all")
+                        checkable: true; checked: root.playbackMode === "list"
+                        onTriggered: bridge.command("mode", "list")
+                    }
+                    QQC.MenuItem {
+                        objectName: "mode_one"
+                        text: bridge.tr("单曲循环", "Repeat one")
+                        checkable: true; checked: root.playbackMode === "one"
+                        onTriggered: bridge.command("mode", "one")
+                    }
+                    QQC.MenuItem {
+                        objectName: "mode_shuffle"
+                        text: bridge.tr("随机播放", "Shuffle")
+                        checkable: true; checked: root.playbackMode === "shuffle"
+                        onTriggered: bridge.command("mode", "shuffle")
+                    }
+                }
+            }
+            Controls { objectName: "popupControls"; bridge: root.bridge }
+            FavoriteButton { objectName: "popupFavoriteButton"; bridge: root.bridge }
+            ControlButton {
+                objectName: "playlistButton"
+                bridge: root.bridge
+                iconName: "playlist"
+                checked: root.playlistShown
+                text: root.playlistShown ? bridge.tr("返回歌词", "Back to lyrics") : bridge.tr("播放列表", "Playlist")
+                onClicked: root.playlistShown = !root.playlistShown
+            }
             Item { Layout.fillWidth: true }
             Text { text: Logic.formatTime(bridge.playback.duration); color: bridge.secondary }
         }

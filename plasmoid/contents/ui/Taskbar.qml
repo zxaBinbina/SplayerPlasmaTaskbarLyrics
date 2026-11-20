@@ -37,10 +37,10 @@ Item {
     }
     readonly property real targetWidth: bridge.hidden ? 0 : collapsed ? coverSize + 8 * panelScale :
         Logic.width(bridge.settings.widthMode, bridge.settings.fixedWidth, bridge.settings.maxWidth,
-            Math.max(first.naturalWidth, second.naturalWidth), coverSize, showControls ? 88 * panelScale : 0,
+            Math.max(first.naturalWidth, second.naturalWidth), coverSize, showControls ? controlsBar.baseWidth * panelScale : 0,
             (showControls ? 24 : 16) * panelScale)
     readonly property real controlScale: Math.min(panelScale,
-        Math.max(0.1, (targetWidth - coverSize - 24 * panelScale - 24) / 88))
+        Math.max(0.1, (targetWidth - coverSize - 24 * panelScale - 24) / controlsBar.baseWidth))
     property real animatedWidth: 0
     property real reservedWidth: 0
     readonly property real widthLimit: !collapsed && bridge.settings.widthMode === "auto" ? bridge.settings.maxWidth : Infinity
@@ -176,8 +176,8 @@ Item {
             opacity: root.controlsProgress
             // Fit-content panels already reserved this space. Keep all buttons
             // at the slot edge while fading, instead of squeezing the lyric row.
-            Layout.minimumWidth: root.fitContentPanel ? controlsBar.implicitWidth : 0
-            Layout.preferredWidth: controlsBar.implicitWidth * (root.fitContentPanel ? 1 : root.controlsProgress)
+            Layout.minimumWidth: root.fitContentPanel ? Math.ceil(controlsBar.implicitWidth) : 0
+            Layout.preferredWidth: root.fitContentPanel ? Math.ceil(controlsBar.implicitWidth) : controlsBar.implicitWidth * root.controlsProgress
             Layout.preferredHeight: controlsBar.implicitHeight
             Layout.alignment: Qt.AlignVCenter
             Controls {
@@ -185,6 +185,7 @@ Item {
                 objectName: "taskbarControls"
                 bridge: root.bridge
                 sizeScale: root.controlScale
+                showFavorite: bridge.settings.hoverFavoriteEnabled !== false
                 anchors.verticalCenter: parent.verticalCenter
                 x: bridge.settings.coverPosition === "right" ? 0 : parent.width - width
             }

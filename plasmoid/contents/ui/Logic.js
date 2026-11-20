@@ -57,3 +57,6 @@ function width(mode, fixed, maximum, text, cover, controls, gap) {
     var total = cover + controls + gap + Math.max(40, text + 8);
     return Math.round(mode === "fixed" ? fixed : Math.min(maximum, total));
 }
+function playMode(playback) {
+    return playback.shuffle === "on" ? "shuffle" : playback.repeat === "one" ? "one" : "list";
+}

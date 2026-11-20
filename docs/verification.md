@@ -18,6 +18,7 @@
 | 暂停冻结、倍速推进、切换歌词行 | 自动化验证通过 |
 | 悬停控制、主体点击、滚轮音量 | 实际 QML 指针／滚轮事件验证通过 |
 | 完整歌词点击跳转及关闭该功能 | 实际 QML 点击验证通过 |
+| 播放模式、收藏、播放列表、悬停收藏开关 | 实际 QML 点击、HTTP 通信、状态更新、分页与窄弹窗检查通过 |
 | 手动主题、SP 主题、中英文切换 | 自动化验证通过 |
 | 离线图标启动、无操作及隐藏释放宽度 | 自动化验证通过 |
 | Plasma 6 原生安装包安装、更新、卸载 | 临时 XDG 目录验证通过，不改动现有桌面 |
@@ -31,6 +32,7 @@ python3 -m unittest discover -s tests -v
 node tests/plugin.mjs
 python3 tests/qml_smoke.py
 python3 tests/qml_animation_smoke.py
+python3 tests/qml_controls_smoke.py
 python3 tests/package_smoke.py
 python3 tests/install_smoke.py
 ```
@@ -244,6 +246,30 @@ KDE 原生样式离屏检查覆盖中英文、360／680 像素窗口宽度，以
 两项服务 active，HTTP 200、SP 插件已连接，保存设置未改变，无 SPTL 运行警告。
 预览为 `artifacts/qml-settings-full.png` 和 `artifacts/qml-settings-narrow.png`，
 实机状态为 `artifacts/settings-layout-native-state.json`。Plasma 5 仍需实机验收。
+
+## 弹窗播放模式、收藏与播放列表
+
+歌词弹窗增加播放模式、收藏、播放列表三个按钮；模式菜单提供列表循环、单曲循环、
+随机播放，收藏高亮读取 SP 托盘状态。列表按钮在当前队列与歌词间切换，
+支持 50 首分页、刷新和点击播放，周期刷新保留用户的滚动位置。
+悬停区默认增加收藏按钮，“悬停时显示收藏按钮”关闭后恢复三个播放按钮，弹窗收藏仍可用。
+
+34 项 Python 回归、插件沙箱、现有 QML 布局与动画、新增 QML 控制交互、
+Plasma 5/6 安装包及隔离安装／更新／卸载检查通过。
+插件检查额外覆盖三种模式、队列缩短回退、过期选曲拒绝、查询失败与恢复、
+API 4 宿主回退，以及慢队列查询期间继续交换播放状态、完成前不确认命令和重复投递去重。
+QML 实际指针检查覆盖收藏状态切换、悬停开关独立性、模式菜单、分页与选曲、
+刷新保留滚动，以及 320 像素弹窗下按钮完整容纳；动画检查覆盖四按钮的 180 像素最大宽度。
+预览为 `artifacts/qml-controls-popup.png`、`qml-controls-playlist.png`、
+`qml-controls-narrow.png` 和 `qml-controls-hover.png`。
+
+当前 SP 安装为 1.2.1-beta.2，已确认其宿主包含队列接口，工作开始时只读托盘检查
+正确返回当前歌曲的已收藏状态。已安装更新并重载 Plasma，18 个组件文件与构建一致，
+辅助服务和 Plasma 服务 active，HTTP 200，原有基准字号 14、动画开启。
+当前面板为自定义长度、高度 46；SP 已关闭，小部件正常收起为 42×42 图标。
+SP 已安装的同 ID 插件脚本也已更新，manifest 与权限保留，下一次启动加载新版。
+状态记录为 `artifacts/controls-native-state.json`，重载后没有 SPTL 运行警告。
+真实 SP 的模式切换、收藏写入与队列选曲仍需下一次启动后的实机确认。
 
 ## 发布状态
 
