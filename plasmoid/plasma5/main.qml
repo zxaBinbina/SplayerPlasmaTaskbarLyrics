@@ -13,7 +13,7 @@ Item {
     Layout.minimumHeight: 16
     Layout.fillHeight: true
     visible: !sharedBridge.hidden
-    Plasmoid.icon: Qt.resolvedUrl("../images/splayer.svg")
+    Plasmoid.icon: Qt.resolvedUrl("../images/sptl.png")
     Plasmoid.status: sharedBridge.hidden ? PlasmaCore.Types.HiddenStatus : PlasmaCore.Types.ActiveStatus
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     Plasmoid.constraintHints: Plasmoid.CanFillArea

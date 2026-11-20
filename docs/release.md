@@ -1,7 +1,13 @@
 # 发布准备
 
-当前版本 0.1.0，SP 插件 ID `zxaBinbina.sptl`，
+当前版本 0.1.1，SP 插件 ID `zxaBinbina.sptl`，
 Plasma 小部件 ID `org.kde.plasma.sptl`。这些 ID 在后续版本中保持不变。
+
+0.1.1 将 KDE 插件信息与安装包图标更新为项目所有者提供的 `sptl.png`，
+任务栏未播放时继续使用原来的 `splayer.svg`。SPlayer 官方插件格式和列表界面
+没有自定义图标字段，因此不添加无效的脚本头部字段。
+本次通过原生 KPackage 图标路径解析、Plasma 包安装及 QML 布局／封面动画检查。
+本机已安装的 PNG 与提供的原图字节一致。
 
 ## 当前发布状态
 
@@ -29,8 +35,8 @@ QML 小部件、构建／安装工具、验证脚本和许可证。
 运行 `python3 tools/build.py` 生成：
 
 - `dist/zxaBinbina.sptl.js`
-- `dist/sptl-plasma5-0.1.0.plasmoid`
-- `dist/sptl-plasma6-0.1.0.plasmoid`
+- `dist/sptl-plasma5-0.1.1.plasmoid`
+- `dist/sptl-plasma6-0.1.1.plasmoid`
 
 辅助程序通过源码仓库和用户级安装脚本交付。
 安装包与依赖、缓存、个人配置、日志不纳入 Git。
