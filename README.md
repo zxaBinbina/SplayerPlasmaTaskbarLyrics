@@ -64,4 +64,16 @@ QML 验证需要 PySide6 和 Plasma/Kirigami QML 模块，仅为开发检查依�
 [架构说明](docs/architecture.md)，验收进展与已知限制见
 [验证记录](docs/verification.md)。
 
-GitHub 创建、推送、发布由项目所有者自行执行；SP 插件市场与 KDE Store 尚未提交。
+## 下载与插件市场
+
+[v0.1.0 公开预览版](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v0.1.0)
+提供 SP 插件、Plasma 5/6 安装包、完整源码及 SHA-256 校验值。
+
+- SP 插件市场：[投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33) 已通过机器人校验，
+  [PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) 等待维护者审核，尚未正式收录。
+- KDE Store：[Plasma 6](https://store.kde.org/p/2382272/) 和
+  [Plasma 5](https://store.kde.org/p/2382273/) 条目已上传，公开页面可访问。
+  Plasma 5 包仍属实验支持，尚未实机验收。
+
+从市场安装单个组件后，仍需按上面的安装说明安装辅助服务及另一组件。
+发布状态详见 [发布说明](docs/release.md)。
