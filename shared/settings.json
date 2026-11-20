@@ -50,6 +50,12 @@
     "max": 32
   },
   {
+    "key": "animationsEnabled",
+    "type": "switch",
+    "label": "界面动画 / Interface animations",
+    "default": true
+  },
+  {
     "key": "coverPosition",
     "type": "select",
     "label": "封面位置 / Cover position",

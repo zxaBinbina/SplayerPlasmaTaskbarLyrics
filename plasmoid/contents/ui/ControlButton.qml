@@ -10,8 +10,13 @@ QQC.ToolButton {
     property string commandAction: ""
     implicitWidth: 28 * sizeScale
     implicitHeight: 28 * sizeScale
+    hoverEnabled: true
     enabled: bridge.connected && !!bridge.track
     contentItem: Item {
+        scale: root.down ? 0.88 : root.hovered ? 1.08 : 1
+        Behavior on scale {
+            NumberAnimation { id: pressMotion; duration: root.bridge.quickDuration; easing.type: Easing.OutCubic }
+        }
         implicitWidth: 18 * root.sizeScale
         implicitHeight: 18 * root.sizeScale
         Canvas {
@@ -56,6 +61,13 @@ QQC.ToolButton {
         radius: 5
         color: root.down ? Qt.rgba(root.bridge.accent.r, root.bridge.accent.g, root.bridge.accent.b, 0.3) :
             root.hovered ? Qt.rgba(root.bridge.foreground.r, root.bridge.foreground.g, root.bridge.foreground.b, 0.12) : "transparent"
+        Behavior on color { ColorAnimation { id: hoverMotion; duration: root.bridge.quickDuration } }
+    }
+    Connections {
+        target: root.bridge
+        function onQuickDurationChanged() {
+            if (root.bridge.quickDuration === 0) { pressMotion.complete(); hoverMotion.complete(); }
+        }
     }
     QQC.ToolTip.visible: hovered
     QQC.ToolTip.text: text

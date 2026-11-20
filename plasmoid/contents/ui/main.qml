@@ -23,8 +23,8 @@ PlasmoidItem {
     preferredRepresentation: compactRepresentation
     compactRepresentation: Taskbar {
         bridge: sharedBridge
-        onTargetWidthChanged: shell.widthHint = targetWidth
-        Component.onCompleted: shell.widthHint = targetWidth
+        onLayoutWidthChanged: shell.widthHint = layoutWidth
+        Component.onCompleted: shell.widthHint = layoutWidth
         onPopupRequested: shell.expanded = !shell.expanded
     }
     fullRepresentation: FullLyrics { bridge: sharedBridge }

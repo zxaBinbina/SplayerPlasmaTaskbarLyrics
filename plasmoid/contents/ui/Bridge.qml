@@ -22,6 +22,8 @@ Item {
     property string lastError: ""
     property bool savingSettings: false
     readonly property var settings: content.settings
+    readonly property int motionDuration: settings.animationsEnabled === false ? 0 : Kirigami.Units.longDuration
+    readonly property int quickDuration: settings.animationsEnabled === false ? 0 : Kirigami.Units.shortDuration
     readonly property var track: content.track
     readonly property var lines: content.lines
     readonly property bool running: reachable && content.running

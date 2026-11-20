@@ -30,6 +30,7 @@ python3 tools/build.py
 python3 -m unittest discover -s tests -v
 node tests/plugin.mjs
 python3 tests/qml_smoke.py
+python3 tests/qml_animation_smoke.py
 python3 tests/package_smoke.py
 python3 tests/install_smoke.py
 ```
@@ -153,6 +154,27 @@ Plasma 6 实机通过实时修改面板高度验证，无需在不同高度之�
 Plasma 日志没有 SPTL 或 Canvas 运行警告。
 实机记录保存在 `artifacts/taskbar-adaptive-native.json`，
 对应截图为 `artifacts/taskbar-adaptive-32.png` 等四个高度版本。
+
+## 界面动画
+
+按用户要求增加歌词切换的淡入与轻微上移、悬停控制区渐显和宽度伸缩、
+异步封面过渡、按钮悬停／按下反馈，以及完整歌词平滑跟随。
+共享配置新增“界面动画”，默认开启；时长跟随 KDE 系统动画设置。
+逐字高亮仍直接使用播放时间，暂停时保持原位置。
+
+`python3 tests/qml_animation_smoke.py` 在真实 QML 组件上验证快速换行、
+连续进出悬停区、动画中的最大宽度限制、左右封面布局、按钮缩放反馈、
+歌词跟随和手动滚动中止、关闭动画时完成过渡，以及慢加载／失败／恢复的封面。
+专项检查通过；既有 QML 布局和交互检查、27 项 Python 回归、插件模拟、
+Plasma 5/6 包内容和隔离安装／更新／卸载检查均通过。
+
+已执行 `python3 tools/install.py --reload-plasma` 更新当前 Plasma 6 小部件。
+安装退出状态为 0，辅助服务及 Plasma 服务 active，HTTP 200，SP 插件已连接，
+配置中的 animationsEnabled 为 true，原有基准字号仍为 14。
+已安装的界面文件和生成默认设置与本次构建逐一一致，
+重载后的 Plasma 日志没有 SPTL QML 运行警告。
+只读状态记录保存在 `artifacts/animation-native-state.json`。
+Plasma 5 的动画表现仍需实机验收。
 
 ## 发布状态
 

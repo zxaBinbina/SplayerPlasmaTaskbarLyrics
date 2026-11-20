@@ -13,6 +13,9 @@ Item {
     property real position: 0
     property bool lineActive: false
     property bool animate: true
+    property int transitionDuration: 0
+    property bool ready: false
+    readonly property bool transitioning: entrance.running
     property double epoch: Date.now()
     property double tick: Date.now()
     readonly property real naturalWidth: base.implicitWidth
@@ -35,29 +38,52 @@ Item {
     }
     implicitHeight: Math.ceil(Math.max(metrics.height, base.implicitHeight))
     FontMetrics { id: metrics; font: base.font }
-    Text {
-        id: base
-        objectName: "renderedText"
-        x: -root.offset
-        anchors.verticalCenter: parent.verticalCenter
-        text: root.text
-        textFormat: Text.PlainText
-        font.pixelSize: root.pixelSize
-        color: root.lineActive && !root.words.length ? root.highlightColor : root.textColor
-    }
     Item {
-        x: -root.offset
-        width: root.highlightWidth
-        height: parent.height
-        clip: true
-        visible: root.words.length > 0
+        id: content
+        anchors.fill: parent
+        transform: Translate { id: shift }
         Text {
+            id: base
+            objectName: "renderedText"
+            x: -root.offset
             anchors.verticalCenter: parent.verticalCenter
             text: root.text
             textFormat: Text.PlainText
-            font: base.font
-            color: root.highlightColor
+            font.pixelSize: root.pixelSize
+            color: root.lineActive && !root.words.length ? root.highlightColor : root.textColor
+            Behavior on color { ColorAnimation { id: colorMotion; duration: root.transitionDuration } }
         }
+        Item {
+            x: -root.offset
+            width: root.highlightWidth
+            height: parent.height
+            clip: true
+            visible: root.words.length > 0
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.text
+                textFormat: Text.PlainText
+                font: base.font
+                color: root.highlightColor
+            }
+        }
+    }
+    ParallelAnimation {
+        id: entrance
+        NumberAnimation {
+            target: content; property: "opacity"; from: 0.35; to: 1
+            duration: root.transitionDuration; easing.type: Easing.OutCubic
+        }
+        NumberAnimation {
+            target: shift; property: "y"; from: Math.min(6, root.pixelSize * 0.2); to: 0
+            duration: root.transitionDuration; easing.type: Easing.OutCubic
+        }
+    }
+    function finishTransition() {
+        if (!ready) return;
+        entrance.stop();
+        content.opacity = 1;
+        shift.y = 0;
     }
     Timer {
         interval: 33
@@ -65,6 +91,17 @@ Item {
         repeat: true
         onTriggered: root.tick = Date.now()
     }
-    onTextChanged: { epoch = Date.now(); tick = epoch; }
+    onTextChanged: {
+        epoch = Date.now(); tick = epoch;
+        // Render the new text and its live word timings immediately. Only the
+        // presentation moves, so rapid changes cannot leave a stale lyric.
+        if (ready && visible && text.length && transitionDuration > 0) entrance.restart();
+        else finishTransition();
+    }
     onWidthChanged: { epoch = Date.now(); tick = epoch; }
+    onTransitionDurationChanged: {
+        if (ready && transitionDuration === 0) { finishTransition(); colorMotion.complete(); }
+    }
+    onVisibleChanged: { if (!visible) finishTransition(); }
+    Component.onCompleted: ready = true
 }

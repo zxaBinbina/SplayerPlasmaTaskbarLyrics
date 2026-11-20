@@ -16,16 +16,36 @@ Rectangle {
     Layout.preferredHeight: 560
     color: bridge.background
     radius: 10
-    function follow() {
-        if (following && bridge.currentIndex >= 0 && lyrics.count)
-            lyrics.positionViewAtIndex(bridge.currentIndex, ListView.Center);
+    function follow(immediate) {
+        if (!visible || !following || bridge.currentIndex < 0 || !lyrics.count) return;
+        scrollMotion.stop();
+        var previous = lyrics.contentY;
+        lyrics.positionViewAtIndex(bridge.currentIndex, ListView.Center);
+        var destination = lyrics.contentY;
+        if (!immediate && bridge.motionDuration > 0 && Math.abs(destination - previous) > 1) {
+            lyrics.contentY = previous;
+            scrollMotion.to = destination;
+            scrollMotion.start();
+        }
+    }
+    NumberAnimation {
+        id: scrollMotion
+        target: lyrics; property: "contentY"
+        duration: bridge.motionDuration * 1.5; easing.type: Easing.OutCubic
     }
     Connections {
         target: bridge
-        function onCurrentIndexChanged() { root.follow(); }
-        function onLinesChanged() { Qt.callLater(root.follow); }
+        function onCurrentIndexChanged() { Qt.callLater(root.follow); }
+        function onLinesChanged() {
+            scrollMotion.stop();
+            Qt.callLater(function() { root.follow(true); });
+        }
+        function onMotionDurationChanged() { if (bridge.motionDuration === 0) scrollMotion.complete(); }
     }
-    onVisibleChanged: { if (visible) { following = true; Qt.callLater(follow); } }
+    onVisibleChanged: {
+        if (visible) { following = true; Qt.callLater(function() { root.follow(true); }); }
+        else { scrollMotion.stop(); resume.stop(); }
+    }
     Timer { id: resume; interval: 4000; onTriggered: { root.following = true; root.follow(); } }
     ColumnLayout {
         anchors.fill: parent
@@ -37,6 +57,7 @@ Rectangle {
             Cover {
                 source: bridge.coverSource
                 idle: !bridge.track
+                transitionDuration: bridge.motionDuration
                 Layout.preferredWidth: 72
                 Layout.preferredHeight: 72
             }
@@ -48,17 +69,20 @@ Rectangle {
                     text: bridge.track ? bridge.track.title : bridge.statusText()
                     pixelSize: 19
                     textColor: bridge.foreground
+                    transitionDuration: bridge.motionDuration
                 }
                 Marquee {
                     Layout.fillWidth: true
                     text: bridge.track ? bridge.track.artists || bridge.tr("未知艺术家", "Unknown artist") : "SPlayer Next"
                     pixelSize: 14
                     textColor: bridge.secondary
+                    transitionDuration: bridge.motionDuration
                 }
             }
         }
         ListView {
             id: lyrics
+            objectName: "fullLyricsList"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -66,9 +90,9 @@ Rectangle {
             model: bridge.lines
             boundsBehavior: Flickable.StopAtBounds
             QQC.ScrollBar.vertical: QQC.ScrollBar {}
-            onMovementStarted: { root.following = false; resume.stop(); }
-            onMovementEnded: resume.restart()
-            onModelChanged: Qt.callLater(root.follow)
+            onMovementStarted: { root.following = false; scrollMotion.stop(); resume.stop(); }
+            onMovementEnded: { if (!root.following) resume.restart(); }
+            onModelChanged: Qt.callLater(function() { root.follow(true); })
             delegate: Rectangle {
                 id: lineDelegate
                 property var line: modelData
@@ -77,6 +101,9 @@ Rectangle {
                 height: lyricColumn.implicitHeight + 20
                 color: active ? Qt.rgba(bridge.accent.r, bridge.accent.g, bridge.accent.b, 0.12) : "transparent"
                 radius: 7
+                Behavior on color {
+                    ColorAnimation { duration: bridge.motionDuration }
+                }
                 Column {
                     id: lyricColumn
                     anchors.left: parent.left

@@ -24,21 +24,43 @@ Item {
         bridge.settings, hovered, bridge.connected ? bridge.tr("未在播放", "Not playing") : bridge.statusText(),
         bridge.tr("未知艺术家", "Unknown artist"))
     readonly property bool showControls: hovered && !collapsed && bridge.connected
+    property bool ready: false
+    property real controlsProgress: showControls ? 1 : 0
+    Behavior on controlsProgress {
+        NumberAnimation { id: controlsMotion; duration: bridge.motionDuration; easing.type: Easing.OutCubic }
+    }
     readonly property real targetWidth: bridge.hidden ? 0 : collapsed ? coverSize + 8 * panelScale :
         Logic.width(bridge.settings.widthMode, bridge.settings.fixedWidth, bridge.settings.maxWidth,
             Math.max(first.naturalWidth, second.naturalWidth), coverSize, showControls ? 88 * panelScale : 0,
             (showControls ? 24 : 16) * panelScale)
     readonly property real controlScale: Math.min(panelScale,
         Math.max(0.1, (targetWidth - coverSize - 24 * panelScale - 24) / 88))
-    implicitWidth: targetWidth
+    property real animatedWidth: targetWidth
+    // Enforce a newly lowered maximum even while an earlier resize is running.
+    readonly property real layoutWidth: bridge.hidden ? 0 :
+        Math.min(animatedWidth, !collapsed && bridge.settings.widthMode === "auto" ? bridge.settings.maxWidth : animatedWidth)
+    Behavior on animatedWidth {
+        enabled: root.ready && root.visible
+        NumberAnimation { id: widthMotion; duration: bridge.motionDuration; easing.type: Easing.OutCubic }
+    }
+    implicitWidth: layoutWidth
     implicitHeight: 42
     Layout.minimumHeight: 16
     Layout.fillHeight: true
-    Layout.minimumWidth: targetWidth
-    Layout.preferredWidth: targetWidth
-    Layout.maximumWidth: targetWidth
+    Layout.minimumWidth: layoutWidth
+    Layout.preferredWidth: layoutWidth
+    Layout.maximumWidth: layoutWidth
     visible: !bridge.hidden
     clip: true
+    Component.onCompleted: ready = true
+    // Panel resizing must fit its new height immediately, including buttons.
+    onHeightChanged: Qt.callLater(function() { widthMotion.complete(); controlsMotion.complete(); })
+    Connections {
+        target: bridge
+        function onMotionDurationChanged() {
+            if (bridge.motionDuration === 0) { widthMotion.complete(); controlsMotion.complete(); }
+        }
+    }
 
     function bodyClick() {
         if (collapsed) {
@@ -67,6 +89,7 @@ Item {
         Cover {
             source: bridge.coverSource
             idle: !bridge.track
+            transitionDuration: bridge.motionDuration
             Layout.preferredWidth: root.coverSize
             Layout.preferredHeight: root.coverSize
             Layout.alignment: Qt.AlignVCenter
@@ -98,6 +121,7 @@ Item {
                     words: root.display.words
                     position: bridge.lyricPosition
                     lineActive: !root.hovered && bridge.currentIndex >= 0
+                    transitionDuration: bridge.motionDuration
                 }
                 Marquee {
                     id: second
@@ -109,18 +133,27 @@ Item {
                     highlightColor: bridge.accent
                     words: root.display.secondaryWords || []
                     position: bridge.lyricPosition
+                    transitionDuration: bridge.motionDuration
                 }
             }
             MouseArea { anchors.fill: parent; onClicked: root.bodyClick() }
         }
-        Controls {
-            id: controlsBar
-            objectName: "taskbarControls"
-            bridge: root.bridge
-            sizeScale: root.controlScale
-            visible: root.showControls
-            Layout.preferredWidth: implicitWidth
+        Item {
+            visible: root.showControls || root.controlsProgress > 0
+            enabled: root.showControls
+            clip: true
+            opacity: root.controlsProgress
+            Layout.preferredWidth: controlsBar.implicitWidth * root.controlsProgress
+            Layout.preferredHeight: controlsBar.implicitHeight
             Layout.alignment: Qt.AlignVCenter
+            Controls {
+                id: controlsBar
+                objectName: "taskbarControls"
+                bridge: root.bridge
+                sizeScale: root.controlScale
+                anchors.verticalCenter: parent.verticalCenter
+                x: bridge.settings.coverPosition === "right" ? 0 : parent.width - width
+            }
         }
     }
     // Measure the configured reference size separately so fitting the rendered
