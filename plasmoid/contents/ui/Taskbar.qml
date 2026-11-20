@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import QtQuick 2.15
+import QtQuick.Window 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15 as QQC
 import "Logic.js" as Logic
@@ -7,6 +8,11 @@ import "Logic.js" as Logic
 Item {
     id: root
     property var bridge
+    readonly property var panelWindow: Window.window
+    // PanelView::LengthMode: FillAvailable = 0, FitContent = 1, Custom = 2.
+    // Older Plasma and desktop hosts without this property use the normal motion.
+    readonly property bool fitContentPanel: panelWindow !== null &&
+        typeof panelWindow.lengthMode === "number" && panelWindow.lengthMode === 1
     signal popupRequested()
     readonly property bool hovered: hover.hovered
     readonly property bool collapsed: !bridge.running
@@ -35,14 +41,38 @@ Item {
             (showControls ? 24 : 16) * panelScale)
     readonly property real controlScale: Math.min(panelScale,
         Math.max(0.1, (targetWidth - coverSize - 24 * panelScale - 24) / 88))
-    property real animatedWidth: targetWidth
-    // Enforce a newly lowered maximum even while an earlier resize is running.
+    property real animatedWidth: 0
+    property real reservedWidth: 0
+    readonly property real widthLimit: !collapsed && bridge.settings.widthMode === "auto" ? bridge.settings.maxWidth : Infinity
+    readonly property real visualWidth: bridge.hidden ? 0 : Math.min(animatedWidth, widthLimit)
+    // Plasma's fit-content panel resizes its window whenever these hints change.
+    // Only that mode reserves space once and animates the inner content row.
+    // Other panels keep the original animation of the widget's layout width.
     readonly property real layoutWidth: bridge.hidden ? 0 :
-        Math.min(animatedWidth, !collapsed && bridge.settings.widthMode === "auto" ? bridge.settings.maxWidth : animatedWidth)
-    Behavior on animatedWidth {
-        enabled: root.ready && root.visible
-        NumberAnimation { id: widthMotion; duration: bridge.motionDuration; easing.type: Easing.OutCubic }
+        fitContentPanel ? Math.min(reservedWidth, widthLimit) : visualWidth
+    NumberAnimation {
+        id: widthMotion
+        target: root; property: "animatedWidth"
+        duration: bridge.motionDuration; easing.type: Easing.OutCubic
+        onFinished: root.reservedWidth = root.targetWidth
     }
+    function resize(immediate) {
+        if (!ready) return;
+        widthMotion.stop();
+        var previous = visualWidth;
+        if (immediate || !visible || bridge.motionDuration === 0 || Math.abs(targetWidth - previous) < 1) {
+            reservedWidth = targetWidth;
+            animatedWidth = targetWidth;
+            return;
+        }
+        reservedWidth = Math.min(widthLimit, Math.max(layoutWidth, targetWidth));
+        widthMotion.from = previous;
+        widthMotion.to = targetWidth;
+        widthMotion.start();
+    }
+    // Both lyric rows may change together. Publish their final size once.
+    onTargetWidthChanged: { if (ready) Qt.callLater(resize); }
+    onFitContentPanelChanged: resize(true)
     implicitWidth: layoutWidth
     implicitHeight: 42
     Layout.minimumHeight: 16
@@ -52,13 +82,13 @@ Item {
     Layout.maximumWidth: layoutWidth
     visible: !bridge.hidden
     clip: true
-    Component.onCompleted: ready = true
+    Component.onCompleted: { ready = true; resize(true); }
     // Panel resizing must fit its new height immediately, including buttons.
-    onHeightChanged: Qt.callLater(function() { widthMotion.complete(); controlsMotion.complete(); })
+    onHeightChanged: Qt.callLater(function() { root.resize(true); controlsMotion.complete(); })
     Connections {
         target: bridge
         function onMotionDurationChanged() {
-            if (bridge.motionDuration === 0) { widthMotion.complete(); controlsMotion.complete(); }
+            if (bridge.motionDuration === 0) { root.resize(true); controlsMotion.complete(); }
         }
     }
 
@@ -79,7 +109,12 @@ Item {
         }
     }
     RowLayout {
-        anchors.fill: parent
+        objectName: "taskbarContent"
+        width: Math.max(0, (root.fitContentPanel ? Math.min(root.width, root.visualWidth) : root.width) - 8 * root.panelScale)
+        anchors.left: !root.fitContentPanel || bridge.settings.coverPosition !== "right" ? parent.left : undefined
+        anchors.right: !root.fitContentPanel || bridge.settings.coverPosition === "right" ? parent.right : undefined
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.leftMargin: 4 * root.panelScale
         anchors.rightMargin: 4 * root.panelScale
         anchors.topMargin: root.verticalPadding

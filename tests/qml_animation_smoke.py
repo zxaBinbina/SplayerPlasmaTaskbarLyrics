@@ -66,9 +66,14 @@ def main():
     component.setData(f"""
 import QtQuick 2.15
 import QtQuick.Window 2.15
+import QtQuick.Layouts 1.15
 import "{ui}" as SPTL
 Window {{
+    id: testWindow
     width: 800; height: 640; visible: true; color: "#131316"
+    property int panelResizeCount: 0
+    // Mirror the native PanelView property, including its change notification.
+    property int lengthMode: 1
     QtObject {{
         id: testBridge; objectName: "bridge"
         property var settings: {json.dumps(dict(DEFAULTS, auxiliary="off", maxWidth=420))}
@@ -94,9 +99,13 @@ Window {{
         function statusText() {{ return "SPlayer Next"; }}
         function command(action, value) {{}}
     }}
-    SPTL.Taskbar {{
-        objectName: "panel"; x: 20; y: 20; width: implicitWidth; height: 42
-        bridge: testBridge
+    RowLayout {{
+        id: fitPanel; x: 20; y: 20; width: implicitWidth; height: 42
+        // Model a fit-content panel with a neighbouring widget. Its width
+        // must remain stable while the SPTL content animates inside its slot.
+        onWidthChanged: testWindow.panelResizeCount++
+        SPTL.Taskbar {{ objectName: "panel"; bridge: testBridge }}
+        Rectangle {{ color: "#333333"; Layout.preferredWidth: 60; Layout.fillHeight: true }}
     }}
     SPTL.FullLyrics {{
         objectName: "popup"; x: 20; y: 80; width: 480; height: 540
@@ -145,6 +154,7 @@ Window {{
     lyrics = popup.findChild(QObject, "fullLyricsList")
     try:
         pump(250)
+        assert panel.property("fitContentPanel")
         until(lambda: artwork.property("activeSlot") >= 0)
         expression(bridge, "currentIndex = 1")
         pump()
@@ -161,13 +171,77 @@ Window {{
         expression(bridge, "position = 2200")
         assert timed.property("highlightWidth") > frozen[0]
 
-        start_width = panel.property("layoutWidth")
+        start_width = panel.property("visualWidth")
         expression(bridge, 'track = ({title: "很长的歌曲名称，需要更多空间来显示歌曲信息", artists: "演示歌手"})')
         QTest.mouseMove(window, QPoint(80, 40))
         pump()
         assert panel.property("showControls")
         assert 0 < panel.property("controlsProgress") < 1
-        assert start_width < panel.property("layoutWidth") < panel.property("targetWidth")
+        assert start_width < panel.property("visualWidth") < panel.property("targetWidth")
+        assert panel.property("layoutWidth") == panel.property("targetWidth")
+        reserved_changes = window.property("panelResizeCount")
+        pump(80)
+        assert window.property("panelResizeCount") == reserved_changes, "animation frames must not resize the panel"
+        until(lambda: panel.property("visualWidth") == panel.property("targetWidth"))
+        assert window.property("panelResizeCount") == reserved_changes
+
+        # Shrinking releases the reserved slot once, after the visual motion.
+        expanded_width = panel.property("layoutWidth")
+        QTest.mouseMove(window, QPoint(760, 620))
+        pump()
+        assert panel.property("targetWidth") < panel.property("visualWidth") < expanded_width
+        assert panel.property("layoutWidth") == expanded_width
+        assert window.property("panelResizeCount") == reserved_changes
+        pump(80)
+        assert window.property("panelResizeCount") == reserved_changes
+        until(lambda: panel.property("layoutWidth") == panel.property("targetWidth"))
+        pump(20)
+        assert window.property("panelResizeCount") == reserved_changes + 1, (
+            f"shrink changed panel size {window.property('panelResizeCount') - reserved_changes} times; "
+            f"layout={panel.property('layoutWidth')}, target={panel.property('targetWidth')}, "
+            f"visual={panel.property('visualWidth')}"
+        )
+
+        # Fill-width and custom panels retain the original per-frame slot motion.
+        for mode in (0, 2):
+            expression(window, f"lengthMode = {mode}")
+            assert not panel.property("fitContentPanel")
+            start_width = panel.property("layoutWidth")
+            QTest.mouseMove(window, QPoint(80, 40))
+            pump()
+            assert start_width < panel.property("layoutWidth") < panel.property("targetWidth")
+            assert panel.property("layoutWidth") == panel.property("visualWidth")
+            animated_changes = window.property("panelResizeCount")
+            pump(80)
+            assert window.property("panelResizeCount") > animated_changes
+            until(lambda: panel.property("layoutWidth") == panel.property("targetWidth"))
+            expanded_width = panel.property("layoutWidth")
+            QTest.mouseMove(window, QPoint(760, 620))
+            pump()
+            assert panel.property("targetWidth") < panel.property("layoutWidth") < expanded_width
+            animated_changes = window.property("panelResizeCount")
+            pump(80)
+            assert window.property("panelResizeCount") > animated_changes
+            until(lambda: panel.property("layoutWidth") == panel.property("targetWidth"))
+
+        # A live mode change during motion settles the old animation immediately.
+        expression(window, "lengthMode = 0")
+        QTest.mouseMove(window, QPoint(80, 40))
+        pump()
+        assert panel.property("layoutWidth") < panel.property("targetWidth")
+        expression(window, "lengthMode = 1")
+        assert panel.property("fitContentPanel")
+        assert panel.property("layoutWidth") == panel.property("targetWidth")
+        QTest.mouseMove(window, QPoint(760, 620))
+        pump()
+        assert panel.property("visualWidth") < panel.property("layoutWidth")
+        expression(window, "lengthMode = 2")
+        assert not panel.property("fitContentPanel")
+        assert panel.property("layoutWidth") == panel.property("visualWidth") == panel.property("targetWidth")
+        expression(window, "lengthMode = 1")
+
+        QTest.mouseMove(window, QPoint(80, 40))
+        pump()
         QTest.mouseMove(window, QPoint(760, 620))
         pump()
         QTest.mouseMove(window, QPoint(80, 40))
