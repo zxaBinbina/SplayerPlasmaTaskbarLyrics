@@ -279,3 +279,9 @@ KDE Store 的 Plasma 6（2382272）和 Plasma 5（2382273）安装包已上传�
 Plasma 5 明确标为实验支持，尚未实机验收。没有另行的平台人工审核通知。
 本次重新执行官方 header、34 项 Python 回归、插件沙箱、QML 和安装包／隔离安装检查，均通过。
 具体链接和发布状态见 [发布说明](release.md)。
+
+图标更新版本 0.1.1 已发布并同步 KDE Store 两个条目，SPlayer 投稿重新通过机器人校验。
+插件信息与包元数据使用项目所有者提供的透明 PNG，原生 KPackage 图标路径解析通过。
+任务栏未播放时保留原来的 SPlayer SVG；本机已安装的 SVG、Cover.qml 和 Bridge.qml
+与更新前逐字节一致，新 PNG 与提供的原图逐字节一致。
+包安装及 QML 布局、封面加载与动画回归通过；辅助服务和 Plasma 服务 active。
