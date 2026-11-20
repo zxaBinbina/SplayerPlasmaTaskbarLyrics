@@ -11,10 +11,11 @@
     "Category": "Multimedia",
     "Authors": [
       {
-        "Name": "zxaBinbina"
+        "Name": "zxaBinbina",
+        "Email": "zxabinbina@mcyzw.top"
       }
     ],
-    "Website": "https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics"
+    "Website": "https://zxabinbina.cc.cd/projects/SPTL"
   },
   "KPackageStructure": "Plasma/Applet",
   "X-Plasma-API-Minimum-Version": "6.0",
