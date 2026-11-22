@@ -2,7 +2,7 @@
 
 - `shared/settings.json`：设置 schema 与默认值的唯一来源。Plasma 原生小部件配置窗口编辑配置。
 - `plugin/runtime.js`：构建为官方可导入的独立 JS 脚本。
-  API 级别 4，声明 network/control；接收 trackChange、lyricChange、lineChange、
+  API 级别 5，声明 network/control/api；接收 trackChange、lyricChange、lineChange、
   playStateChange，并每 300 ms 查询 getNowPlaying/getStatus。
   播放模式使用 setPlayMode；按需检测 API 5 的 getQueue，旧宿主保留其他功能。
 - `helper/sptl/`：Python 3.10+ 标准库 HTTP 服务。只绑定 IPv4 loopback，
@@ -11,6 +11,14 @@
   最低目标 Plasma 5.27 / Qt 5.15 和 Plasma 6 / Qt 6。
 
 ## 协议 v1
+
+1.0 增加 `setVolume`（0–1 的绝对值），原 `volume` 仍表示滚轮的相对增量。
+`startLiked` 使用官方 `api.call` 读取网易云登录状态、喜欢曲目 ID 和歌曲详情，
+交给 `playTrack`、`addToQueue` 播放；按 500 个 ID 请求详情、按 50 首批量插入，
+逆序插入批次以保留歌曲列表顺序，保留已有队列。错误区分未登录、空列表和 API 不可用。
+未连接时，辅助程序保留一次 45 秒内有效的启动意图，并唤起 SPlayer；
+首个插件会话建立后投递一次命令，启动失败取消意图。意图仅保存在内存，不跨服务重启。
+窗口启动和唤起在 HTTP 状态锁外执行，避免阻塞播放快照。
 
 SP 插件 POST `/exchange`：session、locale、track、playback、
 lyricRevision、播放模式能力、队列分页和命令错误；歌词变化或连接恢复时附带 lines。
@@ -89,6 +97,14 @@ SP 主题和语言的持久化数据实际位于
 无法读取本地主题时也回退 Plasma，见验证记录。
 
 ## 默认细节
+
+1.0 默认方形封面，圆形旋转默认关闭；旋转周期 20 秒，与歌词切换过渡独立。
+圆形遮罩在 Plasma 6 使用 QtQuick.Effects，Plasma 5 使用 QtGraphicalEffects；
+未播放图标保持原形，暂停冻结旋转角度，隐藏或关闭旋转时停止动画。
+未播放时点击默认打开 SPlayer，改为“播放我喜欢的音乐”后才自动播放。
+播放中继续遵循原有点击主体设置，控制按钮仍保留各自操作。
+弹窗音量使用绝对值，拖动以 120 ms 合并请求，松手立即提交；键盘每步 1%。
+暂停或没有当前曲目时，只要插件连接，仍可调整音量。
 
 双行、优先翻译、单行不优先辅助、基准字号 14／第二行 0.82 倍、
 封面左侧、自动宽度、固定宽度 320、自动最大宽度 420（整个部件）、

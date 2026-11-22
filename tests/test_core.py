@@ -56,6 +56,32 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(settings["lyricMode"], "single")
         self.assertEqual(settings["manualAccent"], DEFAULTS["manualAccent"])
 
+    def test_absolute_volume_is_validated_independently_of_wheel_steps(self):
+        self.state.exchange(snapshot())
+        for value, expected in ((0, 0), (0.6, 0.6), (2, 1), (-2, 0)):
+            self.state.command("setVolume", value)
+            self.assertEqual(self.state.commands[-1]["value"], expected)
+        for value in (True, None, "0.5", float("nan")):
+            with self.assertRaises(ValueError): self.state.command("setVolume", value)
+
+    def test_pending_liked_start_survives_handshake_once_and_expires(self):
+        self.state.pending_start = self.now
+        response = self.state.exchange(snapshot(startAvailable=True))
+        self.assertEqual([c["action"] for c in response["commands"]], ["startLiked"])
+        self.assertIsNone(self.state.pending_start)
+        self.state.exchange(snapshot(startAvailable=True, ack=[response["commands"][0]["id"]]))
+        self.assertEqual(self.state.commands, [])
+        self.state.pending_start = self.now
+        self.now += 46
+        response = self.state.exchange(dict(snapshot(startAvailable=True), session="new"))
+        self.assertEqual(response["commands"], [])
+
+    def test_old_plugin_reports_unavailable_liked_start(self):
+        self.state.pending_start = self.now
+        self.state.exchange(snapshot())
+        self.assertEqual(self.state.command_error, "start_unavailable")
+        with self.assertRaises(ValueError): self.state.command("startLiked")
+
     def test_legacy_plugin_settings_import_only_once(self):
         data = snapshot()
         data["settings"] = dict(DEFAULTS, fontSize=20)

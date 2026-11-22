@@ -14,12 +14,63 @@
   let acknowledgements = [];
   const modeAvailable = typeof splayer.player.setPlayMode === "function";
   const queueAvailable = typeof splayer.player.getQueue === "function";
+  const startAvailable = !!splayer.api && typeof splayer.api.call === "function" &&
+    typeof splayer.player.playTrack === "function" && typeof splayer.player.addToQueue === "function";
   let queue = {available: queueAvailable, tracks: [], total: 0, currentIndex: -1, offset: 0, requestId: 0, error: ""};
   let repeat = "list", shuffle = "off", commandError = "";
   const handled = new Set();
   const pendingCommands = new Set();
   let commandChain = Promise.resolve();
   const number = (value, fallback) => Number.isFinite(value) ? value : fallback;
+  async function netease(name, params = {}) {
+    const result = await splayer.api.call("netease", name, params);
+    const body = result && result.body;
+    if (result && (result.status === 301 || (body && body.code === 301))) throw new Error("login_required");
+    if (!result || !result.ok || !body || (body.code !== undefined && body.code !== 200))
+      throw new Error("control_failed");
+    return body;
+  }
+  function songTrack(song) {
+    const album = song.al || song.album;
+    return {
+      id: String(song.id), source: "netease", title: String(song.name || ""),
+      artists: (song.ar || song.artists || []).map(artist => ({id: String(artist.id), name: String(artist.name || "")})),
+      album: album ? {id: String(album.id), name: String(album.name || "")} : undefined,
+      duration: Math.max(0, number(song.dt, number(song.duration, 0))),
+      cover: album && album.picUrl || "", fee: song.fee, cloud: song.pc != null
+    };
+  }
+  async function startLiked() {
+    if (!startAvailable) throw new Error("start_unavailable");
+    const login = await netease("login_status");
+    const account = login.data || login;
+    const uid = account.profile && account.profile.userId || account.account && account.account.id;
+    if (!uid) throw new Error("login_required");
+    const liked = await netease("likelist", {uid});
+    const ids = Array.isArray(liked.ids) ? [...new Set(liked.ids.map(String))] : [];
+    if (!ids.length) throw new Error("liked_empty");
+    const tracks = [];
+    // The host resolves playback URLs and credentials. Only song metadata
+    // crosses the official API, and no SP database is read or written.
+    for (let offset = 0; offset < ids.length; offset += 500) {
+      const details = await netease("song_detail", {ids: ids.slice(offset, offset + 500).join(",")});
+      const songs = new Map((details.songs || []).map(song => [String(song.id), song]));
+      for (const id of ids.slice(offset, offset + 500))
+        if (songs.has(id)) tracks.push(songTrack(songs.get(id)));
+    }
+    if (!tracks.length) throw new Error("liked_empty");
+    // Set a deterministic playback order and insert liked songs immediately
+    // after the first one. Reverse the batches to preserve the original order
+    // with the host's 50-track "next" insertion API.
+    await splayer.player.setPlayMode({repeat: "list", shuffle: "off"});
+    await splayer.player.playTrack(tracks[0]);
+    for (let end = tracks.length; end > 1;) {
+      const begin = Math.max(1, end - 50);
+      await splayer.player.addToQueue(tracks.slice(begin, end), "next");
+      end = begin;
+    }
+    splayer.player.play();
+  }
   function setTrack(next) {
     const changed = !track !== !next || (track && next &&
       (track.id !== next.id || track.source !== next.source || track.path !== next.path));
@@ -63,6 +114,13 @@
       case "volume":
         volume = Math.max(0, Math.min(1, volume + number(command.value, 0)));
         splayer.player.setVolume(volume); break;
+      case "setVolume":
+        if (Number.isFinite(command.value)) {
+          volume = Math.max(0, Math.min(1, command.value));
+          splayer.player.setVolume(volume);
+        }
+        break;
+      case "startLiked": await startLiked(); break;
       case "mode":
         await splayer.player.setPlayMode({repeat: command.value === "one" ? "one" : "list",
                                          shuffle: command.value === "shuffle" ? "on" : "off"});
@@ -88,7 +146,8 @@
         break;
       }
     } } catch (error) {
-      commandError = ["queue_changed", "queue_unavailable"].includes(error.message) ? error.message : "control_failed";
+      commandError = ["queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable"].includes(error.message) ?
+        error.message : error.code === "PERMISSION_DENIED" || error.code === "GRANT_DENIED" ? "start_unavailable" : "control_failed";
       if (command.action === "queue")
         queue = {...queue, requestId: command.id, error: "unavailable"};
     }
@@ -123,7 +182,7 @@
           // Query timestamp is authoritative; do not anchor at HTTP arrival time.
           timestamp: number(now.sendTimestamp, Date.now())
         },
-        track, queue, modeAvailable, commandError
+        track, queue, modeAvailable, startAvailable, commandError
       };
       if (sentRevision !== revision) payload.lines = lines;
       const response = await splayer.request("http://127.0.0.1:43827/exchange", {

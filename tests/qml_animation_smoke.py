@@ -84,6 +84,7 @@ Window {{
         property real position: 500
         property real lyricPosition: position
         property bool running: true
+        property bool reachable: true
         property bool connected: true
         property bool playing: false
         property bool hidden: false

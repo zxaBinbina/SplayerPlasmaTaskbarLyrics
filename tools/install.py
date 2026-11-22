@@ -147,7 +147,7 @@ def main():
     if args.reload_plasma:
         print("Reloading Plasma to discard cached widget code; application windows stay open.", flush=True)
         run(systemctl, "--user", "restart", "plasma-plasmashell.service")
-    print(f"Import {install / 'zxaBinbina.sptl.js'} in SP, enable network/control permissions,")
+    print(f"Import {install / 'zxaBinbina.sptl.js'} in SP, enable network/control/api permissions,")
     print("then add SPTL to a horizontal Plasma panel. Right-click SPTL to configure shared settings.")
     if applet_exists and not args.reload_plasma:
         print("Plasma can cache old QML even after re-adding a widget. Use --reload-plasma or log out/in to load updated code.")

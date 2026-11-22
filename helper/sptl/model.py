@@ -121,6 +121,8 @@ class State:
         self.queue = empty_queue()
         self.mode_available = False
         self.command_error = ""
+        self.start_available = False
+        self.pending_start = None
         self.content_revision = 0
         self.playback = {"state": "idle", "position": 0, "duration": 0, "speed": 1,
                          "offset": 0, "volume": 1, "index": -1, "timestamp": 0,
@@ -138,6 +140,7 @@ class State:
                 "theme": self.theme, "running": self.running or self.connected,
                 "favorite": self.favorite, "queue": self.queue if self.connected else empty_queue(),
                 "modeAvailable": self.mode_available, "commandError": self.command_error,
+                "startAvailable": self.start_available,
                 "pluginConnected": self.connected}
 
     def exchange(self, data):
@@ -192,28 +195,40 @@ class State:
         if queue is not None:
             self.queue = queue
         self.mode_available = data.get("modeAvailable") is True
+        self.start_available = data.get("startAvailable") is True
         self.command_error = data.get("commandError", "") if data.get("commandError") in (
-            "control_failed", "queue_changed", "queue_unavailable") else ""
+            "control_failed", "queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable") else ""
         if import_settings:
             self.accept_legacy_settings = False
         self.playback = playback
         self.locale = str(data.get("locale", "zh-CN"))[:32]
         now = self.clock()
         self.commands = [c for c in self.commands if c["id"] not in ack and now - c["created"] < 3]
+        if self.pending_start is not None:
+            requested_at = self.pending_start
+            self.pending_start = None
+            if now - requested_at < 45:
+                if self.start_available:
+                    self.command("startLiked")
+                else:
+                    self.command_error = "start_unavailable"
         if previous != self.content():
             self.content_revision += 1
         return {"protocol": 1, "locale": self.locale, "needLines": self.lyric_revision != revision,
                 "commands": [{k: v for k, v in c.items() if k != "created"} for c in self.commands]}
 
     def command(self, action, value=None):
-        if action not in ("prev", "next", "toggle", "seek", "volume", "mode", "queue", "queuePlay"):
+        if action not in ("prev", "next", "toggle", "seek", "volume", "setVolume", "mode", "queue", "queuePlay", "startLiked"):
             raise ValueError("unknown command")
         if not self.connected:
             raise ValueError("plugin disconnected")
-        if action in ("seek", "volume"):
+        if action == "startLiked" and not self.start_available:
+            raise ValueError("liked playback is unavailable; update the SP plugin")
+        if action in ("seek", "volume", "setVolume"):
             if finite(value, None) is None:
                 raise ValueError("invalid command value")
-            value = max(0, min(value, self.playback["duration"] or value)) if action == "seek" else max(-1, min(1, value))
+            value = (max(0, min(value, self.playback["duration"] or value)) if action == "seek" else
+                     max(0, min(1, value)) if action == "setVolume" else max(-1, min(1, value)))
         if action == "mode" and (not self.mode_available or value not in ("list", "one", "shuffle")):
             raise ValueError("invalid or unavailable playback mode")
         if action == "queue" and (not isinstance(value, int) or isinstance(value, bool) or not -1 <= value <= 1000000):

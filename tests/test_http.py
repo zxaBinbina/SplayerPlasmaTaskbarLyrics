@@ -78,6 +78,24 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/exchange", [1, 2])[0], 400)
         self.assertEqual(self.request("POST", "/command", {"token": state["token"], "action": "unknown"})[0], 400)
 
+    def test_liked_start_launches_then_delivers_after_plugin_connects(self):
+        _, state = self.request("GET", "/state")
+        body = {"token": state["token"], "action": "startLiked"}
+        self.assertEqual(self.request("POST", "/command", dict(body, token="wrong"))[0], 403)
+        self.assertIsNone(self.server.state.pending_start)
+        self.assertEqual(self.request("POST", "/command", body)[0], 200)
+        self.assertEqual(self.env.launched, 1)
+        _, response = self.request("POST", "/exchange", snapshot(startAvailable=True))
+        self.assertEqual(response["commands"][0]["action"], "startLiked")
+        self.assertEqual(self.request("POST", "/command", body)[0], 200)
+        self.assertEqual(self.env.launched, 1, "an already connected player does not need to be raised")
+
+    def test_failed_launch_cancels_pending_playback(self):
+        _, state = self.request("GET", "/state")
+        with patch.object(self.env, "activate", side_effect=ValueError("launcher missing")):
+            self.assertEqual(self.request("POST", "/command", {"token": state["token"], "action": "startLiked"})[0], 400)
+        self.assertIsNone(self.server.state.pending_start)
+
     def test_favorite_uses_sp_and_rejects_stale_or_unauthorized_clicks(self):
         self.request("POST", "/exchange", snapshot())
         _, state = self.request("GET", "/state")

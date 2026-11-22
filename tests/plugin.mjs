@@ -165,3 +165,50 @@ assert.equal(logic.auxiliaryWords(romanLine,"translation").length,0);
 settings.lyricMode="double"; settings.auxiliary="romanization";
 assert.equal(logic.display([romanLine],0,now.track,settings,false,"Idle","Unknown").secondaryWords.length,2);
 console.log("Plugin sandbox and lyric-layout acceptance checks passed");
+
+// Exercise official authenticated APIs and a multi-batch liked playlist.
+const likedTracks = Array.from({length:623}, (_, i) => ({id:i+1, name:"Liked " + i, ar:[{id:1,name:"Singer"}], al:{id:2,name:"Album",picUrl:"https://example.com/cover.jpg"},dt:180000}));
+let likedTimer, likedCommands = [], apiFailure = "", likedIds = likedTracks.map(track => track.id);
+const likedSent = [], likedActions = [], likedQueue = [];
+const likedPlayer = {...splayer.player,
+  getNowPlaying: async () => now,
+  setVolume: value => likedActions.push(["volume", value]),
+  setPlayMode: async mode => likedActions.push(["mode", mode]),
+  playTrack: async track => { likedActions.push(["track", track]); likedQueue.splice(0, likedQueue.length, track); },
+  addToQueue: async (tracks, position) => {
+    assert.ok(tracks.length <= 50); assert.equal(position,"next");
+    likedQueue.splice(1, 0, ...tracks);
+  },
+  play: () => likedActions.push("play")
+};
+const likedHost = {...splayer, player:likedPlayer,
+  api:{call:async (platform,name,params) => {
+    assert.equal(platform,"netease");
+    if (apiFailure === "login") return {ok:true,body:{code:301}};
+    const body = name === "login_status" ? {data:{profile:{userId:42}}} :
+      name === "likelist" ? {code:200,ids:likedIds} :
+      {code:200,songs:params.ids.split(",").map(id => likedTracks.find(track => String(track.id) === id))};
+    return {ok:true,status:200,body};
+  }},
+  request:async (_url,options) => { likedSent.push(JSON.parse(options.body)); return {status:200,body:{protocol:1,commands:likedCommands}}; }
+};
+vm.runInNewContext(plugin,{splayer:likedHost,setInterval:callback => likedTimer=callback,Date,Math,Set,Map});
+await flush();
+assert.equal(likedSent.at(-1).startAvailable,true);
+likedCommands=[{id:100,action:"startLiked"}]; likedTimer(); await flush(); likedTimer(); await flush();
+assert.equal(likedQueue.length,623,"all liked tracks are queued, across the 50-track host limit");
+assert.deepEqual(likedQueue.map(track => track.id),likedTracks.map(track => String(track.id)),"batch insertion preserves the liked playlist order");
+assert.equal(likedQueue[0].source,"netease");
+assert.equal(likedQueue[0].duration,180000);
+assert.equal(likedActions.filter(action => action === "play").length,1,"retried start requests do not restart playback");
+assert.ok(likedSent.at(-1).ack.includes(100));
+likedCommands=[{id:101,action:"setVolume",value:0},{id:102,action:"setVolume",value:1}];
+likedTimer(); await flush();
+assert.deepEqual(likedActions.slice(-2),[["volume",0],["volume",1]],"absolute volume can mute and restore full volume");
+apiFailure="login"; likedCommands=[{id:103,action:"startLiked"}];
+likedTimer(); await flush(); likedTimer(); await flush();
+assert.equal(likedSent.at(-1).commandError,"login_required");
+apiFailure=""; likedIds=[]; likedCommands=[{id:104,action:"startLiked"}];
+likedTimer(); await flush(); likedTimer(); await flush();
+assert.equal(likedSent.at(-1).commandError,"liked_empty");
+console.log("Liked playback, queue ordering, authentication errors and absolute volume checks passed");

@@ -93,8 +93,10 @@ Item {
     }
 
     function bodyClick() {
-        if (collapsed) {
-            if (bridge.settings.offlineClick === "launch") bridge.command("launch");
+        if (collapsed && bridge.settings.offlineClick === "none") return;
+        if (!bridge.playing) {
+            if (bridge.settings.idleClick === "liked") bridge.command("startLiked");
+            else bridge.command("open");
         } else if (bridge.settings.clickAction === "open") bridge.command("open");
         else if (bridge.settings.clickAction === "popup") popupRequested();
     }
@@ -118,8 +120,12 @@ Item {
         spacing: 6 * root.panelScale
         layoutDirection: bridge.settings.coverPosition === "right" ? Qt.RightToLeft : Qt.LeftToRight
         Cover {
+            objectName: "taskbarCover"
             source: bridge.coverSource
             idle: !bridge.track
+            circular: bridge.settings.coverShape === "circle"
+            rotateWhilePlaying: bridge.settings.rotateCover === true
+            playing: bridge.playing
             transitionDuration: bridge.motionDuration
             Layout.preferredWidth: root.coverSize
             Layout.preferredHeight: root.coverSize

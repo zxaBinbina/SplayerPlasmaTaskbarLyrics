@@ -72,6 +72,22 @@
     ]
   },
   {
+    "key": "coverShape",
+    "type": "select",
+    "label": "封面形状 / Cover shape",
+    "default": "square",
+    "options": [
+      { "label": "方形 / Square", "value": "square" },
+      { "label": "圆形 / Circle", "value": "circle" }
+    ]
+  },
+  {
+    "key": "rotateCover",
+    "type": "switch",
+    "label": "播放时旋转圆形封面 / Rotate circular artwork while playing",
+    "default": false
+  },
+  {
     "key": "widthMode",
     "type": "select",
     "label": "宽度模式 / Width mode",
@@ -130,6 +146,16 @@
     ]
   },
   {
+    "key": "idleClick",
+    "type": "select",
+    "label": "未播放时点击主体 / Body click when not playing",
+    "default": "open",
+    "options": [
+      { "label": "打开 SPlayer / Open SPlayer", "value": "open" },
+      { "label": "播放我喜欢的音乐 / Play liked songs", "value": "liked" }
+    ]
+  },
+  {
     "key": "offlineDisplay",
     "type": "select",
     "label": "SP 未运行 / When SP is closed",
@@ -148,11 +174,11 @@
   {
     "key": "offlineClick",
     "type": "select",
-    "label": "收起图标点击 / Offline icon click",
+    "label": "SP 关闭时点击 / Click when SP is closed",
     "default": "launch",
     "options": [
       {
-        "label": "启动 SP / Launch SP",
+        "label": "按未播放时设置执行 / Use the not-playing click setting",
         "value": "launch"
       },
       {

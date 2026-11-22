@@ -26,8 +26,10 @@ class Environment:
     theme = {"available": True, "mode": "dark", "accent": "#fe7971"}
     favorite = {"available": True, "liked": False}
     favorite_clicks = 0
+    launched = 0
     def refresh(self): pass
     def local_cover(self, cover): return None
+    def activate(self): self.launched += 1
     def toggle_favorite(self):
         self.favorite = dict(available=True, liked=not self.favorite["liked"])
         self.favorite_clicks += 1
@@ -42,8 +44,8 @@ def main():
     tracks = [dict(id=str(i), source="local", title=f"第 {i+1} 首 · Playlist song", artists=[{"name": "演示歌手"}], path=f"/music/{i}.flac")
               for i in range(72)]
     data = dict(protocol=1, session="controls", lyricRevision=1, lines=[], locale="zh-CN", track=tracks[3],
-                playback=dict(state="paused", position=4000, duration=60000, timestamp=0, repeat="list", shuffle="off"),
-                modeAvailable=True, queue=dict(available=True, tracks=[], total=0, offset=0, currentIndex=3, requestId=0))
+                playback=dict(state="paused", position=4000, duration=60000, volume=0.4, timestamp=0, repeat="list", shuffle="off"),
+                startAvailable=True, modeAvailable=True, queue=dict(available=True, tracks=[], total=0, offset=0, currentIndex=3, requestId=0))
     with server.lock:
         server.state.exchange(data)
     engine = QQmlEngine()
@@ -100,9 +102,12 @@ Window {{
         pump(100)
 
     def command(action, value=None):
-        until(lambda: any(item["action"] == action and (value is None or item["value"] == value) for item in server.state.commands))
+        def matches(item):
+            return item["action"] == action and (value is None or item["value"] == value or
+                isinstance(value, float) and isinstance(item["value"], (int, float)) and abs(item["value"] - value) < 0.00001)
+        until(lambda: any(matches(item) for item in server.state.commands))
         return next(item for item in reversed(server.state.commands)
-                    if item["action"] == action and (value is None or item["value"] == value))
+                    if matches(item))
 
     def publish():
         with server.lock:
@@ -119,6 +124,51 @@ Window {{
 
     try:
         until(lambda: bridge.property("connected") and bridge.property("favoriteAvailable"))
+        open_button = popup.findChild(QObject, "openSPlayerButton")
+        click(open_button)
+        until(lambda: environment.launched == 1)
+        volume = popup.findChild(QObject, "volumeSlider")
+        until(lambda: abs(volume.property("value") - 0.4) < 0.005)
+        expression(volume, "forceActiveFocus()")
+        QTest.keyClick(window, Qt.Key_Right)
+        command("setVolume", 0.41)
+        data["playback"]["volume"] = 0.2
+        publish()
+        pump(800)
+        until(lambda: abs(volume.property("value") - 0.2) < 0.005)
+        cover = taskbar.findChild(QObject, "taskbarCover")
+        with server.lock: server.update_settings({"coverShape": "circle", "rotateCover": True})
+        expression(bridge, "revision = -1; poll()")
+        until(lambda: cover.property("roundArtwork"))
+        angle = cover.property("artworkRotation")
+        pump(160)
+        assert abs(cover.property("artworkRotation") - angle) < 0.01, "paused artwork must remain still"
+        data["playback"]["state"] = "playing"
+        publish()
+        angle = cover.property("artworkRotation")
+        pump(160)
+        assert cover.property("artworkRotation") > angle + 1, "playing circular artwork rotates"
+        data["playback"]["state"] = "paused"
+        publish()
+        angle = cover.property("artworkRotation")
+        pump(160)
+        assert abs(cover.property("artworkRotation") - angle) < 0.01, "pause freezes rotation"
+        with server.lock: server.update_settings({"coverShape": "square"})
+        expression(bridge, "revision = -1; poll()")
+        until(lambda: not cover.property("roundArtwork"))
+        # Body clicks use the idle choice while paused; playback buttons retain
+        # their own actions and do not trigger the body click.
+        expression(taskbar, "bodyClick()")
+        until(lambda: environment.launched == 2)
+        with server.lock: server.update_settings({"idleClick": "liked"})
+        expression(bridge, "revision = -1; poll()")
+        until(lambda: expression(bridge, 'settings.idleClick === "liked"'))
+        expression(taskbar, "bodyClick()")
+        command("startLiked")
+        assert environment.launched == 2
+        assert window.property("popupCount") == 0
+        with server.lock: server.update_settings({"idleClick": "open"})
+        publish()
         QTest.mouseMove(window, QPoint(80, 40))
         pump(300)
         hover_favorite = taskbar.findChild(QObject, "hoverFavoriteButton")
@@ -185,14 +235,14 @@ Window {{
         assert popup.findChild(QObject, "fullLyricsList").isVisible()
         popup.setProperty("width", 320)
         pump(100)
-        for name in ("playbackModeButton", "popupControls", "popupFavoriteButton", "playlistButton"):
+        for name in ("playbackModeButton", "popupControls", "popupFavoriteButton", "playlistButton", "openSPlayerButton", "volumeSlider"):
             button = popup.findChild(QObject, name)
             left = button.mapToScene(QPointF(0, 0)).x()
             right = button.mapToScene(QPointF(button.property("width"), 0)).x()
             assert 36 <= left <= right <= 324, f"{name} must fit a 320px popup"
         window.grabWindow().save(str(ROOT / "artifacts/qml-controls-narrow.png"))
         assert not warnings, "\n".join(warnings)
-        print("QML favorite state, hover setting, mode menu, playlist paging/selection and narrow popup checks passed")
+        print("QML cover shape/rotation/pause, idle clicks, launch, volume, favorite, mode, queue and narrow popup checks passed")
     finally:
         window.close()
         window.deleteLater()

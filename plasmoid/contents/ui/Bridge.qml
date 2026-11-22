@@ -33,6 +33,9 @@ Item {
     readonly property string actionError: content.commandError === "queue_changed" ?
         tr("播放列表已改变，请刷新后重试", "The playlist changed; refresh and try again") :
         content.commandError === "queue_unavailable" ? tr("此版本 SP 不支持读取播放列表", "This SP version cannot read the playlist") :
+        content.commandError === "login_required" ? tr("请先在 SPlayer 登录网易云音乐", "Sign in to NetEase Music in SPlayer first") :
+        content.commandError === "liked_empty" ? tr("我喜欢的音乐中暂无可播放歌曲", "No playable liked songs") :
+        content.commandError === "start_unavailable" ? tr("请更新 SPlayer 和 SPTL 插件，并允许 API 权限", "Update SPlayer and SPTL, and allow API access") :
         content.commandError === "control_failed" ? tr("SP 操作失败，请重试", "SP action failed; try again") : ""
     property bool queueLoading: false
     property double queueRequestedAt: 0

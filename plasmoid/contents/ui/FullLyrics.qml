@@ -9,6 +9,7 @@ Rectangle {
     property var bridge
     property bool following: true
     property bool playlistShown: false
+    property real pendingVolume: -1
     readonly property string playbackMode: Logic.playMode(bridge.playback)
     implicitWidth: 480
     implicitHeight: 560
@@ -58,6 +59,15 @@ Rectangle {
         onTriggered: bridge.requestQueue(bridge.queue.offset)
     }
     Timer { id: resume; interval: 4000; onTriggered: { root.following = true; root.follow(); } }
+    function commitVolume() {
+        volumeCommit.stop();
+        if (pendingVolume < 0 || !bridge.connected) return;
+        bridge.command("setVolume", pendingVolume);
+        pendingVolume = -1;
+        volumeHold.restart();
+    }
+    Timer { id: volumeCommit; interval: 120; onTriggered: root.commitVolume() }
+    Timer { id: volumeHold; interval: 700 }
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 16
@@ -66,8 +76,12 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 12
             Cover {
+                objectName: "popupCover"
                 source: bridge.coverSource
                 idle: !bridge.track
+                circular: bridge.settings.coverShape === "circle"
+                rotateWhilePlaying: bridge.settings.rotateCover === true
+                playing: bridge.playing
                 transitionDuration: bridge.motionDuration
                 Layout.preferredWidth: 72
                 Layout.preferredHeight: 72
@@ -89,6 +103,12 @@ Rectangle {
                     textColor: bridge.secondary
                     transitionDuration: bridge.motionDuration
                 }
+            }
+            QQC.Button {
+                objectName: "openSPlayerButton"
+                text: bridge.tr("打开 SPlayer", "Open SPlayer")
+                enabled: bridge.reachable
+                onClicked: bridge.command("open")
             }
         }
         ListView {
@@ -235,6 +255,41 @@ Rectangle {
             }
             Item { Layout.fillWidth: true }
             Text { text: Logic.formatTime(bridge.playback.duration); color: bridge.secondary }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+            Text {
+                text: bridge.tr("音量", "Volume")
+                color: bridge.secondary
+            }
+            QQC.Slider {
+                id: volume
+                objectName: "volumeSlider"
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                from: 0; to: 1; stepSize: 0.01
+                enabled: bridge.connected
+                Accessible.name: bridge.tr("SPlayer 音量", "SPlayer volume")
+                Binding {
+                    target: volume; property: "value"
+                    value: bridge.playback.volume === undefined ? 1 : bridge.playback.volume
+                    when: !volume.pressed && !volumeCommit.running && !volumeHold.running
+                    restoreMode: Binding.RestoreNone
+                }
+                onMoved: {
+                    root.pendingVolume = value;
+                    if (!volumeCommit.running) volumeCommit.start();
+                }
+                onPressedChanged: { if (!pressed) root.commitVolume(); }
+            }
+            Text {
+                objectName: "volumePercentage"
+                text: Math.round(volume.value * 100) + "%"
+                color: bridge.secondary
+                horizontalAlignment: Text.AlignRight
+                Layout.preferredWidth: 42
+            }
         }
     }
 }

@@ -1,67 +1,55 @@
-# 发布准备
+# 1.0 正式版
 
-当前版本 0.1.1，SP 插件 ID `zxaBinbina.sptl`，
-Plasma 小部件 ID `org.kde.plasma.sptl`。这些 ID 在后续版本中保持不变。
+版本 **1.0.0**，SP 插件 ID `zxaBinbina.sptl`，Plasma 小部件 ID `org.kde.plasma.sptl`。
+插件 ID 保持不变，Plasma 5 和 6 使用同一版本号、各自的安装包。
 
-0.1.1 将 KDE 插件信息与安装包图标更新为项目所有者提供的 `sptl.png`，
-任务栏未播放时继续使用原来的 `splayer.svg`。SPlayer 官方插件格式和列表界面
-没有自定义图标字段，因此不添加无效的脚本头部字段。
-本次通过原生 KPackage 图标路径解析、Plasma 包安装及 QML 布局／封面动画检查。
-本机已安装的 PNG 与提供的原图字节一致。
+## 新增功能
 
-## 当前发布状态
+- 方形／圆形封面，圆形可开启播放时旋转，暂停冻结。
+- 未播放时点击主体可选择打开 SPlayer，或播放网易云“我喜欢的音乐”；关闭时先启动。
+- 弹窗增加“打开 SPlayer”按钮和与播放器同步的音量滑块，支持鼠标和键盘。
+- 用户取消私人 FM 功能，自动播放仅保留喜欢的音乐，播放模式按钮保持原功能。
 
-2026-11-20 经项目所有者授权首次提交 0.1.0，现已更新为图标预览版 0.1.1。
+## 更新要求
+
+需要 SPlayer 插件 API 5、Python 3.10+、systemd 用户会话，以及 Plasma 5.27／Qt 5.15 或 Plasma 6／Qt 6。
+重新运行安装脚本并重新导入 SP 插件，允许 **network、control、api** 权限。
+自动播放复用 SPlayer 已登录的网易云账号，不在 SPTL 输入账号或凭据。
+喜欢歌曲依原顺序加入当前曲目之后，保留播放器已有队列；不修改 SP 程序或私有数据库。
+
+```sh
+python3 tools/install.py --reload-plasma
+```
+
+Plasma 会短暂重载，应用窗口保留。也可不传 `--reload-plasma`，更新后注销再登录。
+详细说明见 [安装文档](install.md)。
+
+## 发布入口
 
 | 平台 | 链接 | 状态 |
 | --- | --- | --- |
-| GitHub | [v0.1.1 Release](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v0.1.1) | 已公开发布预览版，提供插件、两种 Plasma 包、完整源码、图标和 SHA256SUMS-0.1.1 |
-| SP 插件市场 | [Issue #33](https://github.com/SPlayer-Dev/plugins/issues/33)、[PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) | 官方机器人校验通过，自动创建 PR，等待维护者审核；尚未合并或确认客户端市场可见 |
-| KDE Store / Plasma 6 | [2382272](https://store.kde.org/p/2382272/) | 0.1.1 安装包和新图标已上传，公开文件列表可访问，分类为 Plasma 6 Applets |
-| KDE Store / Plasma 5 | [2382273](https://store.kde.org/p/2382273/) | 0.1.1 安装包和新图标已上传，公开文件列表可访问，分类为 Plasma 5 Applets；明确标为实验支持，尚未实机验收 |
+| GitHub | [v1.0.0](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.0.0) | 1.0 正式版，提供 SP 插件、两种 Plasma 包、完整源码与 SHA256SUMS-1.0.0 |
+| SP 插件市场 | [投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33)、[PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) | 尚未合并，更新已有投稿的 1.0 脚本，等待维护者审核；提交不代表客户端市场已上架 |
+| KDE Store／Plasma 6 | [2382272](https://store.kde.org/p/2382272/) | 0.1.1 已公开，1.0 更新等待账号登录后上传 |
+| KDE Store／Plasma 5 | [2382273](https://store.kde.org/p/2382273/) | 0.1.1 已公开，1.0 更新等待账号登录后上传；Plasma 5 尚未实机验收 |
 
-KDE 条目附中英文安装说明、AGPLv3 许可证、完整源码链接及真实 Plasma 6 任务栏裁剪截图。
-两个条目都明确需要 Python 辅助服务和 SP 插件；Plasma 5 条目说明截图来自 Plasma 6。
-公开页面和包上传状态已经核实，尚未收到另行的平台人工审核通知。
+KDE Store 单个包仍需要安装 Python 辅助服务和 SP 插件。
+历史预览版 0.1.0、0.1.1 保留在 GitHub Release，两个市场条目沿用原 ID。
 
-0.1.0 首次发布前重新执行官方 header 校验、34 项 Python 回归、插件沙箱、QML 布局／动画／控制、
-原生 Plasma 6 包和隔离安装／更新／卸载检查，均通过。未完成的实机验收继续按
-[验证记录](verification.md) 跟踪，不因市场提交而视为通过。
+## 验证与构建材料
 
-## 构建材料
+官方插件头校验、39 项 Python 回归、插件沙箱、QML 布局／动画／控制交互、
+真实 Qt 图形渲染的圆形／方形裁切，以及 Plasma 5／6 包和隔离安装／更新／卸载检查通过。
+私人账号下的实际网易云播放和 Plasma 5 桌面验收未完成，模拟接口检查不作为实机验收。
+验证范围与历史记录见 [验证文档](verification.md)。
 
-源代码包括 SP 插件运行代码、共享设置 schema、Python 辅助程序、
-QML 小部件、构建／安装工具、验证脚本和许可证。
-运行 `python3 tools/build.py` 生成：
+`python3 tools/build.py` 生成：
 
 - `dist/zxaBinbina.sptl.js`
-- `dist/sptl-plasma5-0.1.1.plasmoid`
-- `dist/sptl-plasma6-0.1.1.plasmoid`
+- `dist/sptl-plasma5-1.0.0.plasmoid`
+- `dist/sptl-plasma6-1.0.0.plasmoid`
 
-辅助程序通过源码仓库和用户级安装脚本交付。
-安装包与依赖、缓存、个人配置、日志不纳入 Git。
-发布归档需附带 LICENSE、THIRD_PARTY.md 和对应版本的完整源码／构建材料。
-
-## GitHub
-
-仓库为 `zxaBinbina/SplayerPlasmaTaskbarLyrics`，v0.1.1 已发布为公开预览版。
-完整实机验收仍按 [验证记录](verification.md) 跟踪，正式稳定版发布前应完成对应验收。
-发布版本需同时更新构建脚本、插件头部及 Plasma 包元数据的版本号。
-
-## SP 插件市场
-
-按 [官方流程](https://github.com/SPlayer-Dev/plugins) 提交新建插件 Issue，
-提供已生成的 JS 脚本或已公开的脚本直链；本次使用 GitHub Release 的 JS 下载地址。
-提交前执行官方 header 校验器，确认 ID 与文件名、版本、API 级别及权限。
-公开地址确定后再添加 `@updateUrl`；当前未写入未经发布的下载地址。
-
-分别记录提交时间、机器人校验、维护者审核合并和客户端市场可见状态。
-提交材料不等同于审核通过。
-
-## KDE Store
-
-在 Plasma 小部件分类准备条目，说明还需安装辅助服务和 SP 插件。
-提供对应 Plasma 主版本的包，附安装说明、许可证、源码链接和真实桌面截图。
-当前演示数据的离屏截图只用于开发检查；发布截图应使用已验收的真实任务栏。
-
-分别记录包上传、审核结果及正式上架状态。
+辅助服务通过 `sptl-source-1.0.0.tar.gz` 中的源码和安装脚本交付。
+归档包括 LICENSE、THIRD_PARTY.md、共享 schema、插件、小部件和构建／安装材料。
+SP 插件头部的 `@updateUrl` 指向 GitHub 最新正式版的固定脚本下载地址。
+安装包、依赖、个人配置、浏览器会话和日志不纳入 Git。

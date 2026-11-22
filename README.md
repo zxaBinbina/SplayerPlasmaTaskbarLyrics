@@ -3,7 +3,7 @@
 简称 **SPTL**。通过 SPlayer Next 官方插件 API、Python 辅助服务和 KDE Plasma 小部件，
 显示同步歌词、歌曲封面及播放控制。采用 **AGPL-3.0-only**。
 
-已实现第一版原型：双行原文＋翻译／音译／下一句、单行歌词＋歌曲信息、
+**1.0 正式版**：双行原文＋翻译／音译／下一句、单行歌词＋歌曲信息、
 逐字高亮与暂停冻结、长文字横向滚动、封面左右切换、自动／固定宽度、
 悬停播放控制、滚轮音量、完整歌词与进度跳转、共享设置及中英文显示。
 歌词弹窗提供播放模式、收藏和当前播放列表；播放列表支持翻页与点击播放。
@@ -12,12 +12,19 @@
 封面加载后过渡，按钮提供悬停／按下反馈，完整歌词平滑跟随当前句。
 动画速度跟随 KDE 系统设置，也可在小部件配置中关闭“界面动画”。
 
+封面可选方形或圆形；圆形封面可开启播放时旋转，暂停时冻结。
+未播放（包括暂停）时，点击主体可选择打开 SPlayer，或播放网易云“我喜欢的音乐”。
+SPlayer 关闭时会先启动，再在插件连接后开始播放；“SP 关闭时点击”仍可设为无操作。
+弹窗提供“打开 SPlayer”按钮和音量滑块，可拖动或用键盘调节，音量与 SPlayer 同步。
+自动播放需要在 SPlayer 登录网易云音乐；喜欢歌曲按照原列表顺序插入当前曲目之后，
+保留 SPlayer 原有队列。私人 FM 功能未包含在此版本中。
+
 ## 安装
 
-需要 Python 3.10+、SPlayer Next **插件 API 4+**、Plasma 5.27 / Qt 5.15
+需要 Python 3.10+、SPlayer Next **插件 API 5+**、Plasma 5.27 / Qt 5.15
 或 Plasma 6 / Qt 6，以及 systemd 用户会话。辅助服务只使用 Python 标准库。
 主窗口唤起优先使用 SP 的 MPRIS，启动优先使用已安装的可执行文件或桌面入口。
-播放列表需要 SP 插件 API 5 的队列接口；旧版仍可使用其他功能。
+1.0 插件使用 API 5 的队列、曲目播放与已登录平台接口。
 收藏复用 SP 的 Linux 托盘菜单，需要系统中的 `gdbus` 及 SP 托盘入口。
 
 在项目目录运行：
@@ -30,7 +37,7 @@ python3 tools/install.py
 
 1. 在 SP 的「设置 → 插件管理 → 本地导入」中导入
    `~/.local/share/sptl/zxaBinbina.sptl.js`（遵循 `XDG_DATA_HOME`）。
-2. 启用插件并允许 **network、control** 权限。
+2. 启用插件并允许 **network、control、api** 权限。
 3. 在顶部或底部横向任务栏添加「SPTL — SPlayer 任务栏歌词」。
 4. **右键 SPTL 小部件 → 配置**，修改后点击“应用”；多个小部件共用同一配置。
 
@@ -54,6 +61,8 @@ python3 tests/qml_animation_smoke.py
 python3 tests/qml_controls_smoke.py
 python3 tests/package_smoke.py
 python3 tests/install_smoke.py
+# 在 KDE Wayland 会话验证真实的圆形裁切（需要图形后端）
+python3 tests/qml_cover_render.py --desktop
 ```
 
 构建输出位于被 Git 忽略的 `dist/`：
@@ -66,7 +75,7 @@ QML 验证需要 PySide6 和 Plasma/Kirigami QML 模块，仅为开发检查依�
 
 ## 下载与插件市场
 
-[v0.1.1 公开预览版](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v0.1.1)
+[v1.0.0 正式版](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.0.0)
 提供 SP 插件、Plasma 5/6 安装包、完整源码及 SHA-256 校验值。
 插件信息和安装包使用项目所有者提供的图标；任务栏未播放时保留原来的 SPlayer 图标。
 

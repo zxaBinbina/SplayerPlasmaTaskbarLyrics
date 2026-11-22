@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.1.1"
+VERSION = "1.0.0"
 PLUGIN_ID = "zxaBinbina.sptl"
 
 
@@ -22,8 +22,9 @@ def build():
  * @version {VERSION}
  * @author zxaBinbina
  * @type control
- * @grant network control
- * @apiLevel 4
+ * @grant network control api
+ * @apiLevel 5
+ * @updateUrl https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/latest/download/zxaBinbina.sptl.js
  * @description KDE Plasma 5/6 任务栏同步歌词、封面和播放控制。需安装 SPTL 辅助程序与小部件。
  * @homepage https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics
  */
@@ -47,6 +48,7 @@ def build():
                              "X-Plasma-MainScript": "ui/main.qml", "X-KDE-ServiceTypes": ["Plasma/Applet"]})
             (package / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2))
             shutil.copy2(ROOT / "plasmoid/plasma5/main.qml", package / "contents/ui/main.qml")
+            shutil.copy2(ROOT / "plasmoid/plasma5/CoverMask.qml", package / "contents/ui/CoverMask.qml")
             shutil.copy2(ROOT / "plasmoid/plasma5/metadata.desktop", package / "metadata.desktop")
         archive = dist / f"sptl-plasma{version}-{VERSION}.plasmoid"
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as stream:

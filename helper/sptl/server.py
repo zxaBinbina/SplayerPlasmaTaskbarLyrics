@@ -196,10 +196,11 @@ class Handler(BaseHTTPRequestHandler):
                         settings = self.server.update_settings(data.get("settings"))
                         return self.respond(200, {"protocol": 1, "settings": settings})
                     action = data.get("action")
-                    if action in ("launch", "open"):
-                        self.server.environment.activate()
-                        return self.respond(200, {"ok": True})
-                    if action == "favorite":
+                    if action == "startLiked" and not self.server.state.connected:
+                        self.server.state.pending_start = self.server.state.clock()
+                    elif action in ("launch", "open"):
+                        pass
+                    elif action == "favorite":
                         state = self.server.state
                         value = data.get("value")
                         if not state.connected or not state.track or not isinstance(value, dict) or any(
@@ -209,6 +210,16 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         command_id = self.server.state.command(action, data.get("value"))
                         return self.respond(200, {"id": command_id})
+            if parsed.path == "/command" and action in ("launch", "open", "startLiked"):
+                # A startup request survives the first plugin session handshake.
+                # Window activation must not block playback snapshots.
+                try:
+                    self.server.environment.activate()
+                except (OSError, ValueError):
+                    if action == "startLiked":
+                        with self.server.lock: self.server.state.pending_start = None
+                    raise
+                return self.respond(200, {"ok": True})
             if parsed.path == "/command" and action == "favorite":
                 # D-Bus must not block playback snapshots behind the state lock.
                 self.server.environment.toggle_favorite()

@@ -46,6 +46,7 @@ QQC.ScrollView {
         if (key === "singlePreferAux") return draft.lyricMode === "single";
         if (key === "fixedWidth") return draft.widthMode === "fixed";
         if (key === "maxWidth") return draft.widthMode === "auto";
+        if (key === "rotateCover") return draft.coverShape === "circle";
         if (key === "manualDark" || key === "manualAccent") return draft.themeMode === "manual";
         if (key === "offlineClick") return draft.offlineDisplay === "icon";
         return true;
@@ -142,7 +143,7 @@ QQC.ScrollView {
                 Kirigami.FormData.isSection: true
             }
             Repeater {
-                model: root.settingsFor(["coverPosition", "widthMode", "fixedWidth", "maxWidth"])
+                model: root.settingsFor(["coverPosition", "coverShape", "rotateCover", "widthMode", "fixedWidth", "maxWidth"])
                 delegate: settingDelegate
             }
             Kirigami.Separator {
@@ -158,7 +159,7 @@ QQC.ScrollView {
                 Kirigami.FormData.isSection: true
             }
             Repeater {
-                model: root.settingsFor(["clickAction", "clickLyricSeek", "hoverFavoriteEnabled", "offlineDisplay", "offlineClick"])
+                model: root.settingsFor(["clickAction", "idleClick", "clickLyricSeek", "hoverFavoriteEnabled", "offlineDisplay", "offlineClick"])
                 delegate: settingDelegate
             }
         }
