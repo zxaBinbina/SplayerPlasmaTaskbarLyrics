@@ -122,6 +122,8 @@ class State:
         self.mode_available = False
         self.command_error = ""
         self.start_available = False
+        self.fm_active = False
+        self.fm_available = False
         self.pending_start = None
         self.content_revision = 0
         self.playback = {"state": "idle", "position": 0, "duration": 0, "speed": 1,
@@ -141,6 +143,7 @@ class State:
                 "favorite": self.favorite, "queue": self.queue if self.connected else empty_queue(),
                 "modeAvailable": self.mode_available, "commandError": self.command_error,
                 "startAvailable": self.start_available,
+                "fmActive": self.connected and self.fm_active, "fmAvailable": self.connected and self.fm_available,
                 "pluginConnected": self.connected}
 
     def exchange(self, data):
@@ -196,8 +199,10 @@ class State:
             self.queue = queue
         self.mode_available = data.get("modeAvailable") is True
         self.start_available = data.get("startAvailable") is True
+        self.fm_active = bool(track and track["source"] == "netease" and data.get("fmActive") is True)
+        self.fm_available = data.get("fmAvailable") is True
         self.command_error = data.get("commandError", "") if data.get("commandError") in (
-            "control_failed", "queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable") else ""
+            "control_failed", "queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable", "fm_changed") else ""
         if import_settings:
             self.accept_legacy_settings = False
         self.playback = playback
@@ -218,7 +223,7 @@ class State:
                 "commands": [{k: v for k, v in c.items() if k != "created"} for c in self.commands]}
 
     def command(self, action, value=None):
-        if action not in ("prev", "next", "toggle", "seek", "volume", "setVolume", "mode", "queue", "queuePlay", "startLiked"):
+        if action not in ("prev", "next", "toggle", "seek", "volume", "setVolume", "mode", "queue", "queuePlay", "startLiked", "dislike"):
             raise ValueError("unknown command")
         if not self.connected:
             raise ValueError("plugin disconnected")
@@ -229,8 +234,14 @@ class State:
                 raise ValueError("invalid command value")
             value = (max(0, min(value, self.playback["duration"] or value)) if action == "seek" else
                      max(0, min(1, value)) if action == "setVolume" else max(-1, min(1, value)))
-        if action == "mode" and (not self.mode_available or value not in ("list", "one", "shuffle")):
+        if action == "mode" and (self.fm_active or not self.mode_available or value not in ("list", "one", "shuffle")):
             raise ValueError("invalid or unavailable playback mode")
+        if action == "dislike":
+            if not self.fm_active or not self.fm_available or not self.track or not isinstance(value, dict) or any(
+                value.get(key, "") != self.track[key] for key in ("id", "source", "path")
+            ):
+                raise ValueError("FM track changed or dislike unavailable")
+            value = {key: self.track[key] for key in ("id", "source", "path")}
         if action == "queue" and (not isinstance(value, int) or isinstance(value, bool) or not -1 <= value <= 1000000):
             raise ValueError("invalid queue offset")
         if action == "queuePlay":

@@ -78,8 +78,18 @@
     "default": "square",
     "options": [
       { "label": "方形 / Square", "value": "square" },
+      { "label": "圆角方形 / Rounded square", "value": "rounded" },
       { "label": "圆形 / Circle", "value": "circle" }
     ]
+  },
+  {
+    "key": "coverRadius",
+    "type": "number",
+    "label": "圆角程度（1–49%） / Corner rounding (1–49%)",
+    "default": 25,
+    "min": 1,
+    "max": 49,
+    "unit": "%"
   },
   {
     "key": "rotateCover",
@@ -148,7 +158,7 @@
   {
     "key": "idleClick",
     "type": "select",
-    "label": "未播放时点击主体 / Body click when not playing",
+    "label": "显示“未在播放”时点击 / Body click with no song",
     "default": "open",
     "options": [
       { "label": "打开 SPlayer / Open SPlayer", "value": "open" },
@@ -178,7 +188,7 @@
     "default": "launch",
     "options": [
       {
-        "label": "按未播放时设置执行 / Use the not-playing click setting",
+        "label": "按空闲时设置执行 / Use the idle click setting",
         "value": "launch"
       },
       {

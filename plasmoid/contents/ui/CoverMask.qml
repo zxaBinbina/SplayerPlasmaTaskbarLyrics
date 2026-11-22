@@ -3,6 +3,8 @@ import QtQuick 2.15
 import QtQuick.Effects
 
 MultiEffect {
+    id: effect
+    property real radiusFraction: 0.5
     maskEnabled: true
     maskSource: circleMask
     maskThresholdMin: 0.5
@@ -10,7 +12,7 @@ MultiEffect {
     Rectangle {
         id: circleMask
         anchors.fill: parent
-        radius: Math.min(width, height) / 2
+        radius: Math.min(width, height) * effect.radiusFraction
         color: "white"
         visible: false
         layer.enabled: true

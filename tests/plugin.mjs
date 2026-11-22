@@ -212,3 +212,61 @@ apiFailure=""; likedIds=[]; likedCommands=[{id:104,action:"startLiked"}];
 likedTimer(); await flush(); likedTimer(); await flush();
 assert.equal(likedSent.at(-1).commandError,"liked_empty");
 console.log("Liked playback, queue ordering, authentication errors and absolute volume checks passed");
+
+let fmClock = Date.now(), fmTimer, fmCommands = [], fmGate = null, fmFailure = false, trackAfterFeedback = null;
+let fmNow = {track:{id:"fm-song",source:"netease",path:"",title:"FM",artists:[],duration:120000},state:"playing",position:25000};
+let fmQueueTracks = [], fmQueueIndex = -1;
+const fmSent = [], fmFeedback = [], fmActions = [];
+class FMDate extends Date { static now() { return fmClock; } }
+const fmHost = {...splayer,
+  player:{...splayer.player,
+    getNowPlaying:async()=>fmNow,
+    getStatus:async()=>({...status,currentIndex:fmQueueIndex}),
+    getQueue:async({offset})=>{
+      if(fmGate) await fmGate;
+      if(fmFailure) throw new Error("IPC unavailable");
+      return {tracks:fmQueueTracks.slice(offset,offset+1),total:fmQueueTracks.length,currentIndex:fmQueueIndex,offset};
+    },
+    next:()=>fmActions.push("next")
+  },
+  api:{call:async(platform,name,params)=>{
+    assert.equal(platform,"netease");assert.equal(name,"fm_trash");
+    fmFeedback.push({...params});
+    if (trackAfterFeedback) { fmNow={...fmNow,track:trackAfterFeedback}; trackAfterFeedback=null; }
+    return {ok:true,body:{code:200}};
+  }},
+  request:async(_url,options)=>{fmSent.push(JSON.parse(options.body));return {status:200,body:{protocol:1,commands:fmCommands}};}
+};
+vm.runInNewContext(plugin,{splayer:fmHost,setInterval:callback=>fmTimer=callback,Date:FMDate,Math,Set,Map});
+const fmTick=async()=>{fmClock+=1100;fmTimer();await flush();};
+await flush();await fmTick();
+assert.equal(fmSent.at(-1).fmActive,true,"native FM songs are outside the normal queue");
+assert.equal(fmSent.at(-1).fmAvailable,true);
+fmCommands=[{id:501,action:"dislike",value:{id:"fm-song",source:"netease",path:""}}];
+await fmTick();await fmTick();
+assert.deepEqual(fmFeedback,[{id:"fm-song",time:25}]);
+assert.deepEqual(fmActions,["next"],"dislike submits feedback before advancing native FM");
+assert.ok(fmSent.at(-1).ack.includes(501));
+fmNow={...fmNow,track:{...fmNow.track,id:"new-fm-song"}};
+fmCommands=[{id:502,action:"dislike",value:{id:"fm-song",source:"netease",path:""}}];
+await fmTick();await fmTick();
+assert.equal(fmSent.at(-1).commandError,"fm_changed");
+assert.equal(fmFeedback.length,1,"stale clicks never dislike a different song");
+trackAfterFeedback={...fmNow.track,id:"changed-during-feedback"};
+fmCommands=[{id:503,action:"dislike",value:{id:"new-fm-song",source:"netease",path:""}}];
+await fmTick();await fmTick();
+assert.equal(fmFeedback.length,2);
+assert.deepEqual(fmActions,["next"],"feedback completion must not skip a newly selected song");
+fmCommands=[];fmQueueTracks=[fmNow.track];fmQueueIndex=0;
+await fmTick();await fmTick();
+assert.equal(fmSent.at(-1).fmActive,false,"regular queued online songs retain Previous and playback mode");
+let releaseFm;
+fmGate=new Promise(resolve=>releaseFm=resolve);
+fmNow={...fmNow,track:{...fmNow.track,id:"another-fm-song"}};
+await fmTick();const beforeFmSends=fmSent.length;
+await fmTick();await fmTick();
+assert.equal(fmSent.length,beforeFmSends+2,"slow FM detection cannot block lyric exchanges");
+releaseFm();fmGate=null;await flush();
+fmFailure=true;await fmTick();await fmTick();
+assert.equal(fmSent.at(-1).fmActive,false,"failed detection does not enable a destructive action");
+console.log("Native FM detection, dislike feedback, stale selection and nonblocking IPC checks passed");

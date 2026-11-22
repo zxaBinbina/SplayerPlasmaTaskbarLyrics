@@ -44,6 +44,23 @@ class TrayTests(unittest.TestCase):
             with self.assertRaises(ValueError): TrayFavorite().toggle()
             call.assert_not_called()
 
+    def test_activation_verifies_sp_identity_and_uses_native_tray_click(self):
+        calls = []
+        def call(destination, path, method, *args):
+            calls.append((destination, path, method, args))
+            if method.endswith("ListNames"):
+                return "(['org.freedesktop.StatusNotifierItem-1-1', 'org.freedesktop.StatusNotifierItem-2-1'],)"
+            if args and args[-1] == "Id":
+                return "(<'OtherApp'>,)" if destination.endswith("-1-1") else "(<'SPlayer-Next_status_icon_1'>,)"
+            return "()"
+        with patch.object(TrayFavorite, "call", side_effect=call):
+            self.assertTrue(TrayFavorite().activate())
+        self.assertEqual(calls[-1], ("org.freedesktop.StatusNotifierItem-2-1", "/StatusNotifierItem", "org.kde.StatusNotifierItem.Activate", ("0", "0")))
+
+    def test_missing_tray_allows_launcher_fallback(self):
+        with patch.object(TrayFavorite, "call", return_value="([],)"), patch.object(TrayFavorite, "inspect"):
+            self.assertFalse(TrayFavorite().activate())
+
 
 if __name__ == "__main__":
     unittest.main()

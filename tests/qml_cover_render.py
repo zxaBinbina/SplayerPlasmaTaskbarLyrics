@@ -12,7 +12,7 @@ if "--desktop" in sys.argv:
     os.environ.update(QT_QPA_PLATFORM="wayland", WAYLAND_DISPLAY=display, XDG_RUNTIME_DIR=str(runtime),
                       DBUS_SESSION_BUS_ADDRESS="unix:path=" + str(runtime / "bus"))
 os.environ.pop("QT_QUICK_BACKEND", None)
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QUrl, QObject
 from PySide6.QtGui import QGuiApplication, QImage, QColor
 from PySide6.QtQml import QQmlEngine, QQmlComponent
 from PySide6.QtQuick import QQuickWindow
@@ -34,9 +34,10 @@ ui = (root / "dist/plasma6/org.kde.plasma.sptl/contents/ui").as_uri()
 component.setData(f'''import QtQuick 2.15
 import QtQuick.Window 2.15
 import "{ui}" as SPTL
-Window {{ width:320; height:160; visible:true; color:"#121212"
+Window {{ width:480; height:160; visible:true; color:"#121212"
     SPTL.Cover {{ x:20; y:20; width:120; height:120; circular:true; source:"{image_path.as_uri()}" }}
     SPTL.Cover {{ x:180; y:20; width:120; height:120; source:"{image_path.as_uri()}" }}
+    SPTL.Cover {{ objectName:"rounded"; x:340; y:20; width:120; height:120; cornerRounding:0.25; source:"{image_path.as_uri()}" }}
 }}'''.encode(), QUrl("file:///tmp/sptl-cover-render.qml"))
 window = component.create()
 assert window, "\n".join(x.toString() for x in component.errors())
@@ -52,8 +53,19 @@ try:
     assert color(22,22) == "#121212", "circular corners must be transparent"
     assert color(80,80) == "#fe7971", "circular center must retain artwork"
     assert color(182,22) == "#fe7971", "square corners retain artwork"
+    assert color(342,22) == "#121212", "rounded square corners are transparent"
+    assert color(400,80) == "#fe7971"
+    assert color(350,30) == "#fe7971" and color(30,30) == "#121212", "rounded squares differ from circles"
+    rounded = window.findChild(QObject, "rounded")
+    for radius, expected in ((0.01, "#fe7971"), (0.49, "#121212")):
+        rounded.setProperty("cornerRounding", radius)
+        end = time.monotonic() + 0.3
+        while time.monotonic() < end:
+            app.processEvents(); time.sleep(.01)
+        shot = window.grabWindow()
+        assert color(350,30) == expected, "radius adjustments change the mask"
     assert not warnings, "\n".join(warnings)
-    print("Actual Qt rendering of circular and square artwork passed")
+    print("Actual Qt rendering of circle, square and adjustable rounded-square artwork passed")
 finally:
     window.close()
     window.deleteLater()

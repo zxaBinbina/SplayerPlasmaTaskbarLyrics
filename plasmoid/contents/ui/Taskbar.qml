@@ -29,7 +29,9 @@ Item {
     readonly property var display: Logic.display(bridge.lines, bridge.currentIndex, bridge.track,
         bridge.settings, hovered, bridge.connected ? bridge.tr("未在播放", "Not playing") : bridge.statusText(),
         bridge.tr("未知艺术家", "Unknown artist"))
-    readonly property bool showControls: hovered && !collapsed && bridge.connected
+    readonly property bool controlsAvailable: bridge.connected && !!bridge.track &&
+        (bridge.playing || bridge.playback.state === "paused")
+    readonly property bool showControls: hovered && !collapsed && controlsAvailable
     property bool ready: false
     property real controlsProgress: showControls ? 1 : 0
     Behavior on controlsProgress {
@@ -94,7 +96,7 @@ Item {
 
     function bodyClick() {
         if (collapsed && bridge.settings.offlineClick === "none") return;
-        if (!bridge.playing) {
+        if (collapsed || !bridge.track) {
             if (bridge.settings.idleClick === "liked") bridge.command("startLiked");
             else bridge.command("open");
         } else if (bridge.settings.clickAction === "open") bridge.command("open");
@@ -124,6 +126,7 @@ Item {
             source: bridge.coverSource
             idle: !bridge.track
             circular: bridge.settings.coverShape === "circle"
+            cornerRounding: bridge.settings.coverShape === "rounded" ? bridge.settings.coverRadius / 100 : 0
             rotateWhilePlaying: bridge.settings.rotateCover === true
             playing: bridge.playing
             transitionDuration: bridge.motionDuration
@@ -176,7 +179,7 @@ Item {
             MouseArea { anchors.fill: parent; onClicked: root.bodyClick() }
         }
         Item {
-            visible: root.showControls || root.controlsProgress > 0
+            visible: root.controlsAvailable && (root.showControls || root.controlsProgress > 0)
             enabled: root.showControls
             clip: true
             opacity: root.controlsProgress

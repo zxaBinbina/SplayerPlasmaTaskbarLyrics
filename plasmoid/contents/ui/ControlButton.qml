@@ -48,14 +48,15 @@ QQC.ToolButton {
                 } else if (root.iconName === "media-skip-forward") {
                     ctx.moveTo(4, 3); ctx.lineTo(13, 9); ctx.lineTo(4, 15); ctx.closePath();
                     ctx.rect(13, 3, 2, 12);
-                } else if (root.iconName === "favorite") {
+                } else if (root.iconName === "favorite" || root.iconName === "dislike") {
                     ctx.moveTo(9, 15);
                     ctx.bezierCurveTo(7, 13, 2, 9.5, 2, 6);
                     ctx.bezierCurveTo(2, 1.5, 7, 1.5, 9, 5);
                     ctx.bezierCurveTo(11, 1.5, 16, 1.5, 16, 6);
                     ctx.bezierCurveTo(16, 9.5, 11, 13, 9, 15);
                     ctx.closePath();
-                    fillGlyph = root.checked;
+                    if (root.iconName === "dislike") { ctx.moveTo(2, 2); ctx.lineTo(16, 16); }
+                    fillGlyph = root.iconName === "favorite" && root.checked;
                 } else if (root.iconName === "playlist") {
                     ctx.moveTo(2, 4); ctx.lineTo(15, 4);
                     ctx.moveTo(2, 8); ctx.lineTo(11, 8);

@@ -38,6 +38,21 @@ class TrayFavorite:
             raise ValueError("SP tray is unavailable")
         return result.stdout
 
+    def activate(self):
+        """Invoke SP's native tray click, which restores its main window."""
+        try:
+            names = self.call("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                              "org.freedesktop.DBus.ListNames")
+            for destination in re.findall(r"'(org\.freedesktop\.StatusNotifierItem-\d+-\d+)'", names):
+                identifier = self.call(destination, "/StatusNotifierItem",
+                    "org.freedesktop.DBus.Properties.Get", "org.kde.StatusNotifierItem", "Id")
+                if re.search(r"<'SPlayer[-_]Next_status_icon_", identifier):
+                    self.call(destination, "/StatusNotifierItem", "org.kde.StatusNotifierItem.Activate", "0", "0")
+                    return True
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
+        return False
+
     def inspect(self, names=None):
         try:
             if names is None:

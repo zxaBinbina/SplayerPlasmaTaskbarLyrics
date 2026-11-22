@@ -82,6 +82,27 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(self.state.command_error, "start_unavailable")
         with self.assertRaises(ValueError): self.state.command("startLiked")
 
+    def test_rounded_cover_bounds_exclude_square_and_circle(self):
+        for radius, expected in ((0, 1), (25, 25), (50, 49), (float("nan"), 25)):
+            settings = validate_settings({"coverShape": "rounded", "coverRadius": radius})
+            self.assertEqual(settings["coverShape"], "rounded")
+            self.assertEqual(settings["coverRadius"], expected)
+
+    def test_fm_dislike_validates_identity_and_hides_mode_capability(self):
+        data = snapshot(fmActive=True, fmAvailable=True, modeAvailable=True)
+        data["track"] = dict(id="fm-song", source="netease")
+        self.state.exchange(data)
+        selected = {key: self.state.track[key] for key in ("id", "source", "path")}
+        self.state.command("dislike", selected)
+        self.assertEqual(self.state.commands[-1]["value"], selected)
+        with self.assertRaises(ValueError): self.state.command("dislike", dict(selected, id="previous-song"))
+        with self.assertRaises(ValueError): self.state.command("mode", "shuffle")
+        data["fmActive"] = False
+        self.state.exchange(data)
+        with self.assertRaises(ValueError): self.state.command("dislike", selected)
+        self.now += 5
+        self.assertFalse(self.state.content()["fmActive"])
+
     def test_legacy_plugin_settings_import_only_once(self):
         data = snapshot()
         data["settings"] = dict(DEFAULTS, fontSize=20)

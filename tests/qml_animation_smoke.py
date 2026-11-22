@@ -78,7 +78,7 @@ Window {{
         id: testBridge; objectName: "bridge"
         property var settings: {json.dumps(dict(DEFAULTS, auxiliary="off", maxWidth=420))}
         property var track: ({{ title: "歌曲名称", artists: "演示歌手" }})
-        property var playback: ({{ duration: 60000, offset: 0 }})
+        property var playback: ({{ state: "paused", duration: 60000, offset: 0 }})
         property var lines: {json.dumps(lines, ensure_ascii=False)}
         property int currentIndex: 0
         property real position: 500
@@ -95,6 +95,8 @@ Window {{
         property string lastError: ""
         property string actionError: ""
         property bool modeAvailable: true
+        property bool fmActive: false
+        property bool fmAvailable: true
         property bool favoriteAvailable: true
         property bool favoriteLiked: false
         property bool queueLoading: false

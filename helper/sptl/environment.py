@@ -156,12 +156,11 @@ class Environment:
         self.tray.toggle()
 
     def activate(self):
-        if self.bus_name:
-            try:
-                if self.dbus("org.mpris.MediaPlayer2.Raise", dest=self.bus_name, path="/org/mpris/MediaPlayer2"):
-                    return
-            except (OSError, subprocess.SubprocessError):
-                pass
+        # SP currently acknowledges MPRIS Raise without restoring its window.
+        # Its verified tray activation runs focusMainWindow; the launcher also
+        # restores an existing instance through SP's second-instance handler.
+        if self.tray.activate():
+            return
         if self.command_override:
             command = self.command_override
         else:

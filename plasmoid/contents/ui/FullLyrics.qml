@@ -44,6 +44,7 @@ Rectangle {
             Qt.callLater(function() { root.follow(true); });
         }
         function onMotionDurationChanged() { if (bridge.motionDuration === 0) scrollMotion.complete(); }
+        function onFmActiveChanged() { if (bridge.fmActive) modeMenu.close(); }
     }
     onVisibleChanged: {
         if (visible) { following = true; Qt.callLater(function() { root.follow(true); }); }
@@ -80,6 +81,7 @@ Rectangle {
                 source: bridge.coverSource
                 idle: !bridge.track
                 circular: bridge.settings.coverShape === "circle"
+                cornerRounding: bridge.settings.coverShape === "rounded" ? bridge.settings.coverRadius / 100 : 0
                 rotateWhilePlaying: bridge.settings.rotateCover === true
                 playing: bridge.playing
                 transitionDuration: bridge.motionDuration
@@ -213,6 +215,7 @@ Rectangle {
             ControlButton {
                 id: modeButton
                 objectName: "playbackModeButton"
+                visible: !bridge.fmActive
                 bridge: root.bridge
                 iconName: root.playbackMode === "shuffle" ? "shuffle" : root.playbackMode === "one" ? "repeat-one" : "repeat"
                 checked: root.playbackMode !== "list"

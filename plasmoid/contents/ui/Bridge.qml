@@ -28,11 +28,14 @@ Item {
     readonly property var lines: content.lines
     readonly property var queue: content.queue || ({available: false, tracks: [], total: 0, currentIndex: -1, offset: 0, requestId: 0, error: ""})
     readonly property bool modeAvailable: content.modeAvailable === true
+    readonly property bool fmActive: connected && content.fmActive === true
+    readonly property bool fmAvailable: connected && content.fmAvailable === true
     readonly property bool favoriteAvailable: !!content.favorite && content.favorite.available === true
     readonly property bool favoriteLiked: !!content.favorite && content.favorite.liked === true
     readonly property string actionError: content.commandError === "queue_changed" ?
         tr("播放列表已改变，请刷新后重试", "The playlist changed; refresh and try again") :
         content.commandError === "queue_unavailable" ? tr("此版本 SP 不支持读取播放列表", "This SP version cannot read the playlist") :
+        content.commandError === "fm_changed" ? tr("私人 FM 曲目已变化，请重试", "The FM song changed; try again") :
         content.commandError === "login_required" ? tr("请先在 SPlayer 登录网易云音乐", "Sign in to NetEase Music in SPlayer first") :
         content.commandError === "liked_empty" ? tr("我喜欢的音乐中暂无可播放歌曲", "No playable liked songs") :
         content.commandError === "start_unavailable" ? tr("请更新 SPlayer 和 SPTL 插件，并允许 API 权限", "Update SPlayer and SPTL, and allow API access") :

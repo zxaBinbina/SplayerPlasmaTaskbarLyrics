@@ -9,11 +9,14 @@ Row {
     readonly property real baseWidth: showFavorite ? 118 : 88
     spacing: 2 * sizeScale
     ControlButton {
+        objectName: "previousOrDislikeButton"
         bridge: root.bridge
         sizeScale: root.sizeScale
-        iconName: "media-skip-backward"
-        commandAction: "prev"
-        text: bridge.tr("上一首", "Previous")
+        iconName: bridge.fmActive ? "dislike" : "media-skip-backward"
+        commandAction: bridge.fmActive ? "dislike" : "prev"
+        commandValue: bridge.fmActive && bridge.track ? ({id: bridge.track.id, source: bridge.track.source, path: bridge.track.path || ""}) : undefined
+        enabled: bridge.connected && !!bridge.track && (!bridge.fmActive || bridge.fmAvailable)
+        text: bridge.fmActive ? bridge.tr("不喜欢（私人 FM）", "Dislike (Personal FM)") : bridge.tr("上一首", "Previous")
     }
     ControlButton {
         bridge: root.bridge

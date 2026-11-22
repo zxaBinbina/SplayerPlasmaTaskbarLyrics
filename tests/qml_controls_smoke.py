@@ -157,19 +157,64 @@ Window {{
         expression(bridge, "revision = -1; poll()")
         until(lambda: not cover.property("roundArtwork"))
         assert abs(cover.property("artworkRotation")) < 0.01, "square artwork must return to its original orientation"
-        # Body clicks use the idle choice while paused; playback buttons retain
-        # their own actions and do not trigger the body click.
-        expression(taskbar, "bodyClick()")
-        until(lambda: environment.launched == 2)
-        with server.lock: server.update_settings({"idleClick": "liked"})
-        expression(bridge, "revision = -1; poll()")
-        until(lambda: expression(bridge, 'settings.idleClick === "liked"'))
-        expression(taskbar, "bodyClick()")
-        command("startLiked")
-        assert environment.launched == 2
-        assert window.property("popupCount") == 0
-        with server.lock: server.update_settings({"idleClick": "open"})
+        data["playback"]["state"] = "playing"
+        for radius in (1, 25, 49):
+            with server.lock: server.update_settings({"coverShape": "rounded", "coverRadius": radius})
+            publish()
+            assert abs(cover.property("cornerRounding") - radius / 100) < 0.001
+            assert not cover.property("roundArtwork")
+            pump(160)
+            assert abs(cover.property("artworkRotation")) < 0.01, "rounded squares never rotate during playback"
+        with server.lock: server.update_settings({"coverShape": "square"})
         publish()
+        # Retained songs use the normal body action, including paused/stopped
+        # and loading states. Only the no-song view uses the idle choice.
+        for state in ("paused", "stopped", "loading"):
+            data["playback"]["state"] = state
+            for idle_action in ("open", "liked"):
+                for body_action in ("popup", "open", "none"):
+                    with server.lock: server.update_settings({"idleClick": idle_action, "clickAction": body_action})
+                    publish()
+                    assert expression(taskbar, "display.primary") != "未在播放"
+                    opened, expanded = environment.launched, window.property("popupCount")
+                    click(cover)
+                    if state == "paused":
+                        until(lambda: taskbar.property("showControls"))
+                        assert taskbar.findChild(QObject, "taskbarControls").isVisible(), "paused songs retain playback controls"
+                    else:
+                        assert not taskbar.property("showControls")
+                        assert not taskbar.findChild(QObject, "taskbarControls").isVisible()
+                    if body_action == "open": until(lambda: environment.launched == opened + 1)
+                    assert environment.launched == opened + (body_action == "open")
+                    assert window.property("popupCount") == expanded + (body_action == "popup")
+                    assert not server.state.commands, "retained songs must not start liked playback"
+        saved_track = data["track"]
+        data["track"] = None
+        data["playback"]["state"] = "idle"
+        for idle_action in ("open", "liked"):
+            with server.lock: server.update_settings({"idleClick": idle_action, "clickAction": "popup"})
+            publish()
+            assert expression(taskbar, "display.primary") == "未在播放"
+            until(lambda: not taskbar.findChild(QObject, "taskbarControls").isVisible())
+            assert not taskbar.property("showControls"), "no-song view must not show hover controls"
+            idle_width = taskbar.property("targetWidth")
+            QTest.mouseMove(window, QPoint(780, 740))
+            pump(250)
+            QTest.mouseMove(window, cover.mapToScene(QPointF(10, 10)).toPoint())
+            pump(250)
+            assert not taskbar.findChild(QObject, "taskbarControls").isVisible()
+            assert taskbar.property("targetWidth") == idle_width, "idle hover must not reserve button space"
+            opened, expanded = environment.launched, window.property("popupCount")
+            click(cover)
+            if idle_action == "open": until(lambda: environment.launched == opened + 1)
+            else: command("startLiked")
+            assert environment.launched == opened + (idle_action == "open")
+            assert window.property("popupCount") == expanded
+        data["track"] = saved_track
+        data["playback"]["state"] = "paused"
+        with server.lock: server.update_settings({"idleClick": "open", "clickAction": "popup"})
+        publish()
+        window.setProperty("popupCount", 0)
         QTest.mouseMove(window, QPoint(80, 40))
         pump(300)
         hover_favorite = taskbar.findChild(QObject, "hoverFavoriteButton")
@@ -191,6 +236,33 @@ Window {{
         click(popup_favorite)
         until(lambda: environment.favorite_clicks == 2)
         until(lambda: not bridge.property("favoriteLiked"))
+
+        saved_track = data["track"]
+        data["track"] = dict(saved_track, source="netease", path="")
+        data.update(fmActive=True, fmAvailable=True)
+        publish()
+        hover_previous = taskbar.findChild(QObject, "taskbarControls").findChild(QObject, "previousOrDislikeButton")
+        popup_previous = popup.findChild(QObject, "popupControls").findChild(QObject, "previousOrDislikeButton")
+        mode_button = popup.findChild(QObject, "playbackModeButton")
+        assert not mode_button.isVisible(), "FM hides the playback mode button"
+        QTest.mouseMove(window, cover.mapToScene(QPointF(10, 10)).toPoint())
+        pump(250)
+        for previous in (hover_previous, popup_previous):
+            assert previous.property("commandAction") == "dislike"
+            assert previous.property("iconName") == "dislike"
+            click(previous)
+            selection = command("dislike")["value"]
+            assert selection == {"id": saved_track["id"], "source": "netease", "path": ""}
+            publish()
+        data["fmAvailable"] = False
+        publish()
+        assert not hover_previous.isEnabled() and not popup_previous.isEnabled()
+        data["track"] = saved_track
+        data.update(fmActive=False, fmAvailable=False)
+        publish()
+        assert mode_button.isVisible()
+        assert hover_previous.property("commandAction") == "prev"
+        assert popup_previous.property("commandAction") == "prev"
 
         mode_button = popup.findChild(QObject, "playbackModeButton")
         for mode in ("one", "shuffle", "list"):
@@ -243,7 +315,7 @@ Window {{
             assert 36 <= left <= right <= 324, f"{name} must fit a 320px popup"
         window.grabWindow().save(str(ROOT / "artifacts/qml-controls-narrow.png"))
         assert not warnings, "\n".join(warnings)
-        print("QML cover shape/rotation/pause, idle clicks, launch, volume, favorite, mode, queue and narrow popup checks passed")
+        print("QML rounded covers, idle/paused clicks and hover, FM dislike/mode, launch, volume, favorites, queue and popup checks passed")
     finally:
         window.close()
         window.deleteLater()

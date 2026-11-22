@@ -5,6 +5,7 @@ Item {
     property string source: ""
     property bool idle: false
     property bool circular: false
+    property real cornerRounding: 0
     property bool rotateWhilePlaying: false
     property bool playing: false
     readonly property bool roundArtwork: circular && !idle
@@ -46,8 +47,8 @@ Item {
     Item {
         id: artwork
         anchors.fill: parent
-        layer.enabled: root.roundArtwork
-        layer.effect: CoverMask {}
+        layer.enabled: !root.idle && (root.circular || root.cornerRounding > 0)
+        layer.effect: CoverMask { radiusFraction: root.circular ? 0.5 : Math.max(0.01, Math.min(0.49, root.cornerRounding)) }
         NumberAnimation on rotation {
             objectName: "coverRotation"
             from: 0; to: 360; duration: 20000; loops: Animation.Infinite

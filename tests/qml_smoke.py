@@ -215,15 +215,10 @@ Window {{
         pump(80)
         with server.lock:
             assert any(c["action"] == "volume" and c["value"] == 0.05 for c in server.state.commands)
-        with server.lock:
-            data["playback"] = dict(data["playback"], state="playing", speed=0, timestamp=int(time.time()*1000))
-            publish()
-        pump()
         QTest.mouseClick(window, Qt.LeftButton, pos=QPoint(105, 40))
         pump(80)
         assert window.property("popupCount") == 1
         with server.lock:
-            data["playback"] = dict(data["playback"], state="paused")
             data["settings"] = dict(data["settings"], coverPosition="right", lyricMode="single", singlePreferAux=True)
             publish()
         pump()

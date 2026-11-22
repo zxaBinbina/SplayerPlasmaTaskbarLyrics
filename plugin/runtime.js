@@ -14,6 +14,8 @@
   let acknowledgements = [];
   const modeAvailable = typeof splayer.player.setPlayMode === "function";
   const queueAvailable = typeof splayer.player.getQueue === "function";
+  const fmAvailable = queueAvailable && !!splayer.api && typeof splayer.api.call === "function";
+  let fmActive = false, fmProbeBusy = false, fmProbeAt = 0;
   const startAvailable = !!splayer.api && typeof splayer.api.call === "function" &&
     typeof splayer.player.playTrack === "function" && typeof splayer.player.addToQueue === "function";
   let queue = {available: queueAvailable, tracks: [], total: 0, currentIndex: -1, offset: 0, requestId: 0, error: ""};
@@ -22,6 +24,30 @@
   const pendingCommands = new Set();
   let commandChain = Promise.resolve();
   const number = (value, fallback) => Number.isFinite(value) ? value : fallback;
+  const sameTrack = (a, b) => !!a && !!b && ["id", "source", "path"].every(key => String(a[key] || "") === String(b[key] || ""));
+  async function readFm(now, status) {
+    if (!now.track || now.track.source !== "netease" || !queueAvailable ||
+        (now.state !== "playing" && now.state !== "paused")) return false;
+    if (typeof status.fmMode === "boolean") return status.fmMode;
+    if (typeof now.fmMode === "boolean") return now.fmMode;
+    // SP's native FM pool is separate from its normal queue. Regular online
+    // playback inserts the loaded song into that queue before publishing it.
+    const selectedIndex = number(status.currentIndex, -1);
+    const page = await splayer.player.getQueue({offset: Math.max(0, selectedIndex), limit: 1});
+    if (page.currentIndex !== selectedIndex) return false; // Index changed during IPC; retry.
+    return !sameTrack(now.track, page.tracks[0]);
+  }
+  function probeFm(now, status) {
+    if (!track || track.source !== "netease" || !queueAvailable) { fmActive = false; return; }
+    if (fmProbeBusy || Date.now() - fmProbeAt < 1000) return;
+    fmProbeBusy = true;
+    fmProbeAt = Date.now();
+    const observed = track;
+    // Slow queue IPC must never stop lyrics/status exchanges.
+    readFm(now, status).then(active => { if (sameTrack(observed, track)) fmActive = active; })
+      .catch(() => { if (sameTrack(observed, track)) fmActive = false; })
+      .finally(() => { fmProbeBusy = false; });
+  }
   async function netease(name, params = {}) {
     const result = await splayer.api.call("netease", name, params);
     const body = result && result.body;
@@ -77,6 +103,7 @@
     track = next;
     duration = next ? number(next.duration, 0) : 0;
     if (changed) {
+      fmActive = false; fmProbeAt = 0;
       lines = []; index = -1; position = 0; generation++; lyricRevision++;
     }
   }
@@ -121,7 +148,17 @@
         }
         break;
       case "startLiked": await startLiked(); break;
+      case "dislike": {
+        if (!fmAvailable) throw new Error("start_unavailable");
+        const [now, status] = await Promise.all([splayer.player.getNowPlaying(), splayer.player.getStatus()]);
+        if (!sameTrack(now.track, command.value) || !await readFm(now, status)) throw new Error("fm_changed");
+        await netease("fm_trash", {id: String(now.track.id), time: Math.max(0, Math.round(number(now.position, 0) / 1000))});
+        const latest = await splayer.player.getNowPlaying();
+        if (sameTrack(now.track, latest.track)) splayer.player.next();
+        break;
+      }
       case "mode":
+        if (fmActive) throw new Error("fm_changed");
         await splayer.player.setPlayMode({repeat: command.value === "one" ? "one" : "list",
                                          shuffle: command.value === "shuffle" ? "on" : "off"});
         break;
@@ -146,7 +183,7 @@
         break;
       }
     } } catch (error) {
-      commandError = ["queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable"].includes(error.message) ?
+      commandError = ["queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable", "fm_changed"].includes(error.message) ?
         error.message : error.code === "PERMISSION_DENIED" || error.code === "GRANT_DENIED" ? "start_unavailable" : "control_failed";
       if (command.action === "queue")
         queue = {...queue, requestId: command.id, error: "unavailable"};
@@ -170,6 +207,7 @@
       speed = Math.max(0, number(now.speed, 1));
       offset = number(now.lyricOffsetMs, 0);
       volume = Math.max(0, Math.min(1, number(status.volume, volume)));
+      probeFm(now, status);
       repeat = status.repeat === "one" ? "one" : "list";
       shuffle = status.shuffle === "on" ? "on" : "off";
       queue = {...queue, currentIndex: number(status.currentIndex, queue.currentIndex)};
@@ -182,7 +220,7 @@
           // Query timestamp is authoritative; do not anchor at HTTP arrival time.
           timestamp: number(now.sendTimestamp, Date.now())
         },
-        track, queue, modeAvailable, startAvailable, commandError
+        track, queue, modeAvailable, startAvailable, fmActive, fmAvailable, commandError
       };
       if (sentRevision !== revision) payload.lines = lines;
       const response = await splayer.request("http://127.0.0.1:43827/exchange", {

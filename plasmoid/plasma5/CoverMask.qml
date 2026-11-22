@@ -3,10 +3,12 @@ import QtQuick 2.15
 import QtGraphicalEffects 1.15
 
 OpacityMask {
+    id: effect
+    property real radiusFraction: 0.5
     maskSource: Rectangle {
-        width: parent.width
-        height: parent.height
-        radius: Math.min(width, height) / 2
+        width: effect.width
+        height: effect.height
+        radius: Math.min(width, height) * effect.radiusFraction
         color: "white"
     }
 }
