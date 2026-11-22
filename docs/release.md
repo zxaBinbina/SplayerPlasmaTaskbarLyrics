@@ -1,6 +1,6 @@
 # 1.0 正式版
 
-版本 **1.0.0**，SP 插件 ID `zxaBinbina.sptl`，Plasma 小部件 ID `org.kde.plasma.sptl`。
+版本 **1.0.1**，SP 插件 ID `zxaBinbina.sptl`，Plasma 小部件 ID `org.kde.plasma.sptl`。
 插件 ID 保持不变，Plasma 5 和 6 使用同一版本号、各自的安装包。
 
 ## 新增功能
@@ -28,13 +28,13 @@ Plasma 会短暂重载，应用窗口保留。也可不传 `--reload-plasma`，�
 
 | 平台 | 链接 | 状态 |
 | --- | --- | --- |
-| GitHub | [v1.0.0](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.0.0) | 1.0 正式版，提供 SP 插件、两种 Plasma 包、完整源码与 SHA256SUMS-1.0.0 |
-| SP 插件市场 | [投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33)、[PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) | 尚未合并，更新已有投稿的 1.0 脚本，等待维护者审核；提交不代表客户端市场已上架 |
-| KDE Store／Plasma 6 | [2382272](https://store.kde.org/p/2382272/) | 0.1.1 已公开，1.0 更新等待账号登录后上传 |
-| KDE Store／Plasma 5 | [2382273](https://store.kde.org/p/2382273/) | 0.1.1 已公开，1.0 更新等待账号登录后上传；Plasma 5 尚未实机验收 |
+| GitHub | [v1.0.1](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.0.1) | 1.0 正式版，提供 SP 插件、两种 Plasma 包、完整源码与 SHA256SUMS-1.0.1 |
+| SP 插件市场 | [投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33)、[PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) | 1.0 脚本已通过机器人校验，PR 尚未合并，等待维护者审核 |
+| KDE Store／Plasma 6 | [2382272](https://store.kde.org/p/2382272/) | 按用户要求暂不更新，保留 0.1.1 |
+| KDE Store／Plasma 5 | [2382273](https://store.kde.org/p/2382273/) | 按用户要求暂不更新，保留 0.1.1；Plasma 5 尚未实机验收 |
 
 KDE Store 单个包仍需要安装 Python 辅助服务和 SP 插件。
-历史预览版 0.1.0、0.1.1 保留在 GitHub Release，两个市场条目沿用原 ID。
+1.0.1 修复从旋转圆形封面切回方形时残留旋转角度的问题。1.0.0 与历史预览版 0.1.0、0.1.1 保留在 GitHub Release，两个市场条目沿用原 ID。
 
 ## 验证与构建材料
 
@@ -46,10 +46,10 @@ KDE Store 单个包仍需要安装 Python 辅助服务和 SP 插件。
 `python3 tools/build.py` 生成：
 
 - `dist/zxaBinbina.sptl.js`
-- `dist/sptl-plasma5-1.0.0.plasmoid`
-- `dist/sptl-plasma6-1.0.0.plasmoid`
+- `dist/sptl-plasma5-1.0.1.plasmoid`
+- `dist/sptl-plasma6-1.0.1.plasmoid`
 
-辅助服务通过 `sptl-source-1.0.0.tar.gz` 中的源码和安装脚本交付。
+辅助服务通过 `sptl-source-1.0.1.tar.gz` 中的源码和安装脚本交付。
 归档包括 LICENSE、THIRD_PARTY.md、共享 schema、插件、小部件和构建／安装材料。
 SP 插件头部的 `@updateUrl` 指向 GitHub 最新正式版的固定脚本下载地址。
 安装包、依赖、个人配置、浏览器会话和日志不纳入 Git。

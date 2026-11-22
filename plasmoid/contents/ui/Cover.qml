@@ -53,6 +53,7 @@ Item {
             from: 0; to: 360; duration: 20000; loops: Animation.Infinite
             running: root.roundArtwork && root.rotateWhilePlaying && root.visible
             paused: running && !root.playing
+            onRunningChanged: { if (!running) artwork.rotation = 0; }
         }
         Image {
             anchors.fill: parent

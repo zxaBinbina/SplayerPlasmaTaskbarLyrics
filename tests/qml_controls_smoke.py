@@ -156,6 +156,7 @@ Window {{
         with server.lock: server.update_settings({"coverShape": "square"})
         expression(bridge, "revision = -1; poll()")
         until(lambda: not cover.property("roundArtwork"))
+        assert abs(cover.property("artworkRotation")) < 0.01, "square artwork must return to its original orientation"
         # Body clicks use the idle choice while paused; playback buttons retain
         # their own actions and do not trigger the body click.
         expression(taskbar, "bodyClick()")

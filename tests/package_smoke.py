@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     for version in (5, 6):
-        archive = ROOT / f"dist/sptl-plasma{version}-1.0.0.plasmoid"
+        archive = ROOT / f"dist/sptl-plasma{version}-1.0.1.plasmoid"
         with zipfile.ZipFile(archive) as package:
             assert package.testzip() is None
             assert {"metadata.json", "contents/ui/main.qml", "contents/ui/Defaults.js",

@@ -75,7 +75,7 @@ QML 验证需要 PySide6 和 Plasma/Kirigami QML 模块，仅为开发检查依�
 
 ## 下载与插件市场
 
-[v1.0.0 正式版](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.0.0)
+[v1.0.1 正式版](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.0.1)
 提供 SP 插件、Plasma 5/6 安装包、完整源码及 SHA-256 校验值。
 插件信息和安装包使用项目所有者提供的图标；任务栏未播放时保留原来的 SPlayer 图标。
 

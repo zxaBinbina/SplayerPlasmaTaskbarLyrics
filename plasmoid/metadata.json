@@ -6,7 +6,7 @@
     "Description": "Synchronized SPlayer Next lyrics, artwork and playback controls",
     "Description[zh_CN]": "SPlayer Next 同步歌词、封面和播放控制",
     "Icon": "/images/sptl.png",
-    "Version": "1.0.0",
+    "Version": "1.0.1",
     "License": "AGPL-3.0-only",
     "Category": "Multimedia",
     "Authors": [
