@@ -55,7 +55,7 @@ Item {
     readonly property int currentIndex: Logic.currentIndex(lines, lyricPosition)
     readonly property var theme: content.theme || ({ available: false })
     readonly property bool plasmaTheme: settings.themeMode === "plasma" ||
-        (settings.themeMode === "splayer" && !theme.available)
+        (settings.themeMode === "splayer" && (!reachable || !theme.available))
     readonly property bool plasmaDark: Kirigami.Theme.backgroundColor.r +
         Kirigami.Theme.backgroundColor.g + Kirigami.Theme.backgroundColor.b < 1.5
     readonly property bool dark: plasmaTheme ? plasmaDark : settings.themeMode === "manual" ?

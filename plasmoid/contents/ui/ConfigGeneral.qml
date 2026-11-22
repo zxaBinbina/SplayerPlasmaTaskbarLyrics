@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import QtQuick 2.15
+import QtQuick.Window 2.15
 import QtQuick.Controls 2.15 as QQC
 import QtQuick.Layouts 1.15
 import org.kde.kirigami 2.20 as Kirigami
 import "Defaults.js" as Defaults
+import "ConfigurationHelpers.js" as ConfigurationHelpers
 
 QQC.ScrollView {
     id: root
@@ -27,6 +29,9 @@ QQC.ScrollView {
     clip: true
     QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
     Bridge { id: configBridge }
+    Component.onCompleted: Qt.callLater(function() {
+        if (root.Window.window) ConfigurationHelpers.bindLicense(root.Window.window.contentItem);
+    })
 
     function label(value) {
         var parts = value.split(" / ");
@@ -152,7 +157,22 @@ QQC.ScrollView {
                 Kirigami.FormData.isSection: true
             }
             Repeater {
-                model: root.settingsFor(["themeMode", "manualDark", "manualAccent", "animationsEnabled"])
+                model: root.settingsFor(["themeMode"])
+                delegate: settingDelegate
+            }
+            Kirigami.InlineMessage {
+                objectName: "spThemeWarning"
+                Layout.fillWidth: true
+                visible: root.draft.themeMode === "splayer" && (!configBridge.reachable || !configBridge.theme.available)
+                type: Kirigami.MessageType.Warning
+                text: configBridge.theme.source === "cover" ?
+                    configBridge.tr("无法读取 SPlayer 的封面动态主题色，“跟随 SP”将使用 Plasma 配色。",
+                        "SPlayer's dynamic cover color is unavailable. Follow SP will use Plasma colors.") :
+                    configBridge.tr("无法读取 SPlayer 当前主题色，“跟随 SP”将使用 Plasma 配色。",
+                        "SPlayer's current theme color is unavailable. Follow SP will use Plasma colors.")
+            }
+            Repeater {
+                model: root.settingsFor(["manualDark", "manualAccent", "animationsEnabled"])
                 delegate: settingDelegate
             }
             Kirigami.Separator {

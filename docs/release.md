@@ -1,59 +1,50 @@
-# 1.0 正式版
+# 1.1.0 正式版
 
-版本 **1.0.1**，SP 插件 ID `zxaBinbina.sptl`，Plasma 小部件 ID `org.kde.plasma.sptl`。
-插件 ID 保持不变，Plasma 5 和 6 使用同一版本号、各自的安装包。
+SP 插件与 Plasma 5／6 小组件版本统一为 **1.1.0**，插件 ID 保持不变。
+本次按用户最新指令更新 KDE Store，并提交、推送 GitHub；SP 插件市场投稿保持原状。
 
-本机未发布修正：空闲点击只在没有当前歌曲、显示“未在播放”时生效，暂停时使用原有主体点击设置。
-另含空闲悬停隐藏控制、FM 隐藏模式并将上一首改为不喜欢、主窗口唤起修复和可调圆角方形封面。
-按用户要求，后续更改暂不发布到各个商店；本次不创建新的公开 Release 或更新市场投稿。
+## 新增与修正
 
-## 新增功能
+- 鼠标／触摸板滚轮调节音量，使用 KDE 原生播放器 OSD 显示 SPlayer 名称与实际百分比，0%／100% 处仍有反馈。
+- 无法读取 SP 当前配色时，在主题来源选择框下方显示警告，回退 Plasma 配色。
+- 方形、圆角方形（1–49%）与圆形封面；圆形可在播放时旋转，暂停冻结；圆角方形不旋转。
+- 无当前歌曲时可点击打开 SPlayer 或播放网易云“我喜欢的音乐”；暂停歌曲使用原有点击设置。
+- 修复 SPlayer 已运行时无法唤起主窗口的问题；弹窗提供唤起按钮和同步音量滑块。
+- 私人 FM 隐藏播放模式，将弹窗及悬停区的上一首改为不喜欢；自动开始播放只使用喜欢歌曲。
+- 空闲／加载／停止／断开连接时隐藏悬停控制；四个任务栏操作按钮不显示文字提示。
+- 中文设置侧栏显示“设置”，原生关于页的查看许可证按钮显示完整 AGPL 文本。
 
-- 方形／圆形封面，圆形可开启播放时旋转，暂停冻结。
-- 未播放时点击主体可选择打开 SPlayer，或播放网易云“我喜欢的音乐”；关闭时先启动。
-- 弹窗增加“打开 SPlayer”按钮和与播放器同步的音量滑块，支持鼠标和键盘。
-- 用户取消私人 FM 功能，自动播放仅保留喜欢的音乐，播放模式按钮保持原功能。
+## 安装与升级
 
-## 更新要求
-
-需要 SPlayer 插件 API 5、Python 3.10+、systemd 用户会话，以及 Plasma 5.27／Qt 5.15 或 Plasma 6／Qt 6。
-重新运行安装脚本并重新导入 SP 插件，允许 **network、control、api** 权限。
-自动播放复用 SPlayer 已登录的网易云账号，不在 SPTL 输入账号或凭据。
-喜欢歌曲依原顺序加入当前曲目之后，保留播放器已有队列；不修改 SP 程序或私有数据库。
+需要 Python 3.10+、systemd 用户会话、gdbus、SPlayer 插件 API 5+，以及
+Plasma 5.27／Qt 5.15 或 Plasma 6／Qt 6。KDE Store 单独安装小组件不足以运行，
+升级时请同时更新 Python 辅助服务与 SPlayer 插件。
 
 ```sh
 python3 tools/install.py --reload-plasma
 ```
 
-Plasma 会短暂重载，应用窗口保留。也可不传 `--reload-plasma`，更新后注销再登录。
+在 SPlayer 中导入生成的 `zxaBinbina.sptl.js`，允许 **network、control、api** 权限。
+网易云自动播放复用 SPlayer 已登录账号，不需要在 SPTL 输入凭据。
 详细说明见 [安装文档](install.md)。
 
 ## 发布入口
 
 | 平台 | 链接 | 状态 |
 | --- | --- | --- |
-| GitHub | [v1.0.1](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.0.1) | 1.0 正式版，提供 SP 插件、两种 Plasma 包、完整源码与 SHA256SUMS-1.0.1 |
-| SP 插件市场 | [投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33)、[PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) | 1.0 脚本已通过机器人校验，PR 尚未合并，等待维护者审核 |
-| KDE Store／Plasma 6 | [2382272](https://store.kde.org/p/2382272/) | 按用户要求暂不更新，保留 0.1.1 |
-| KDE Store／Plasma 5 | [2382273](https://store.kde.org/p/2382273/) | 按用户要求暂不更新，保留 0.1.1；Plasma 5 尚未实机验收 |
+| GitHub | [v1.1.0](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.1.0) | 提供 SP 插件、Plasma 5／6 包、辅助服务源码与 SHA256 校验文件 |
+| KDE Store／Plasma 6 | [2382272](https://store.kde.org/p/2382272/) | 1.1.0 已发布，安装包校验值与本地一致 |
+| KDE Store／Plasma 5 | [2382273](https://store.kde.org/p/2382273/) | 1.1.0 已发布，安装包校验值与本地一致；Plasma 5 尚未实机验收 |
+| SP 插件市场 | [投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33)、[PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) | 本次未更新投稿，等待维护者审核 |
 
-KDE Store 单个包仍需要安装 Python 辅助服务和 SP 插件。
-1.0.1 修复从旋转圆形封面切回方形时残留旋转角度的问题。1.0.0 与历史预览版 0.1.0、0.1.1 保留在 GitHub Release，两个市场条目沿用原 ID。
+## 验证与分发材料
 
-## 验证与构建材料
+48 项 Python 回归、插件沙箱、QML 布局／交互／配置、真实 Qt 图形裁切及双版本包校验，
+隔离安装／升级／卸载检查通过。实机小组件滚轮使 SPlayer 音量从 50% 调到 55%，
+收到对应原生 OSD 信号后恢复原音量。Plasma 5 包已构建，但仍未在 Plasma 5 桌面实机验收。
+完整验证与历史记录见 [验证文档](verification.md)。
 
-官方插件头校验、39 项 Python 回归、插件沙箱、QML 布局／动画／控制交互、
-真实 Qt 图形渲染的圆形／方形裁切，以及 Plasma 5／6 包和隔离安装／更新／卸载检查通过。
-私人账号下的实际网易云播放和 Plasma 5 桌面验收未完成，模拟接口检查不作为实机验收。
-验证范围与历史记录见 [验证文档](verification.md)。
-
-`python3 tools/build.py` 生成：
-
-- `dist/zxaBinbina.sptl.js`
-- `dist/sptl-plasma5-1.0.1.plasmoid`
-- `dist/sptl-plasma6-1.0.1.plasmoid`
-
-辅助服务通过 `sptl-source-1.0.1.tar.gz` 中的源码和安装脚本交付。
-归档包括 LICENSE、THIRD_PARTY.md、共享 schema、插件、小部件和构建／安装材料。
-SP 插件头部的 `@updateUrl` 指向 GitHub 最新正式版的固定脚本下载地址。
-安装包、依赖、个人配置、浏览器会话和日志不纳入 Git。
+`python3 tools/build.py` 生成 SP 脚本及 `sptl-plasma5-1.1.0.plasmoid`、`sptl-plasma6-1.1.0.plasmoid`。
+GitHub Release 提供插件、两种小组件安装包、`sptl-source-1.1.0.tar.gz` 与 `SHA256SUMS-1.1.0`。
+源码包含辅助服务、共享 schema、插件、小组件、构建／安装脚本、LICENSE 与 THIRD_PARTY.md。
+SP 插件的 `@updateUrl` 沿用 GitHub 最新正式版的固定脚本下载地址；历史版本保持可下载。

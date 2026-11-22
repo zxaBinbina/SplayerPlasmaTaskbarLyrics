@@ -77,9 +77,18 @@
     "label": "封面形状 / Cover shape",
     "default": "square",
     "options": [
-      { "label": "方形 / Square", "value": "square" },
-      { "label": "圆角方形 / Rounded square", "value": "rounded" },
-      { "label": "圆形 / Circle", "value": "circle" }
+      {
+        "label": "方形 / Square",
+        "value": "square"
+      },
+      {
+        "label": "圆角方形 / Rounded square",
+        "value": "rounded"
+      },
+      {
+        "label": "圆形 / Circle",
+        "value": "circle"
+      }
     ]
   },
   {
@@ -161,8 +170,14 @@
     "label": "显示“未在播放”时点击 / Body click with no song",
     "default": "open",
     "options": [
-      { "label": "打开 SPlayer / Open SPlayer", "value": "open" },
-      { "label": "播放我喜欢的音乐 / Play liked songs", "value": "liked" }
+      {
+        "label": "打开 SPlayer / Open SPlayer",
+        "value": "open"
+      },
+      {
+        "label": "播放我喜欢的音乐 / Play liked songs",
+        "value": "liked"
+      }
     ]
   },
   {
@@ -188,7 +203,7 @@
     "default": "launch",
     "options": [
       {
-        "label": "按空闲时设置执行 / Use the idle click setting",
+        "label": "遵循显示“未在播放”时点击设置 / Use the idle click setting",
         "value": "launch"
       },
       {

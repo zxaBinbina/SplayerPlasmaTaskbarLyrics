@@ -16,7 +16,7 @@ from sptl.model import DEFAULTS
 from sptl.server import BridgeServer
 
 from PySide6.QtCore import QObject, QUrl, QPoint, QPointF, Qt
-from PySide6.QtGui import QGuiApplication, QIcon, QWheelEvent
+from PySide6.QtGui import QGuiApplication, QIcon, QWheelEvent, QPointingDevice, QInputDevice
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression, QQmlPropertyMap
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtTest import QTest
@@ -30,6 +30,8 @@ class FakeEnvironment:
     def local_cover(self, cover): return None
     launched = 0
     def activate(self): self.launched += 1
+    def __init__(self): self.volume_osds = []
+    def show_volume(self, percent): self.volume_osds.append(percent)
 
 
 def main():
@@ -215,6 +217,46 @@ Window {{
         pump(80)
         with server.lock:
             assert any(c["action"] == "volume" and c["value"] == 0.05 for c in server.state.commands)
+        touchpad = QPointingDevice("Test touchpad", 991, QInputDevice.DeviceType.TouchPad,
+            QPointingDevice.PointerType.Finger, QInputDevice.Capability.Position, 1, 0)
+        cover = panel.findChild(QObject, "taskbarCover")
+        points = [cover.mapToScene(QPointF(cover.property("width") / 2, cover.property("height") / 2)),
+                  QPointF(110, 40), next_button.mapToScene(QPointF(14, 14))]
+        for device, source, pixel, angle in (
+            (QPointingDevice.primaryPointingDevice(), Qt.MouseEventNotSynthesized, QPoint(0, 0), QPoint(0, 120)),
+            (QPointingDevice.primaryPointingDevice(), Qt.MouseEventSynthesizedBySystem, QPoint(0, 0), QPoint(0, 120)),
+            (touchpad, Qt.MouseEventSynthesizedBySystem, QPoint(0, 0), QPoint(0, 120)),
+            (touchpad, Qt.MouseEventSynthesizedBySystem, QPoint(0, -20), QPoint(0, 0))):
+            for point in points:
+                with server.lock: server.state.commands.clear()
+                event = QWheelEvent(point, point, pixel, angle, Qt.NoButton, Qt.NoModifier,
+                    Qt.ScrollUpdate, False, source, device)
+                app.sendEvent(window, event)
+                pump(80)
+                with server.lock:
+                    commands = [c for c in server.state.commands if c["action"] == "volume"]
+                    assert len(commands) == 1, "wheel input must reach the widget once from artwork, lyrics and controls"
+                    assert commands[0]["value"] == (0.05 if angle.y() > 0 else -0.05)
+        # Feedback waits for SP's actual volume, then avoids repeated OSDs on polls.
+        server.environment.volume_osds.clear()
+        with server.lock:
+            data["playback"]["volume"] = .55
+            publish()
+        pump(650)
+        assert server.environment.volume_osds == [55]
+        pump(650)
+        assert server.environment.volume_osds == [55], "unchanged polls must not redisplay the OSD"
+        for volume, direction in ((0, -120), (1, 120)):
+            with server.lock:
+                data["playback"]["volume"] = volume
+                publish()
+            pump(1600)
+            server.environment.volume_osds.clear()
+            event = QWheelEvent(QPointF(110, 40), QPointF(110, 40), QPoint(0, 0), QPoint(0, direction),
+                                Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False)
+            app.sendEvent(window, event)
+            pump(100)
+            assert server.environment.volume_osds == [volume * 100], "volume limits still need feedback"
         QTest.mouseClick(window, Qt.LeftButton, pos=QPoint(105, 40))
         pump(80)
         assert window.property("popupCount") == 1

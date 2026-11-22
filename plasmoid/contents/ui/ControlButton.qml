@@ -9,6 +9,7 @@ QQC.ToolButton {
     property string iconName: ""
     property string commandAction: ""
     property var commandValue
+    property bool toolTipEnabled: true
     readonly property color glyphColor: checked ? bridge.accent : bridge.foreground
     implicitWidth: 28 * sizeScale
     implicitHeight: 28 * sizeScale
@@ -110,7 +111,7 @@ QQC.ToolButton {
             if (root.bridge.quickDuration === 0) { pressMotion.complete(); hoverMotion.complete(); }
         }
     }
-    QQC.ToolTip.visible: hovered
+    QQC.ToolTip.visible: root.toolTipEnabled && hovered
     QQC.ToolTip.text: text
     onClicked: { if (commandAction) bridge.command(commandAction, commandValue); }
     Accessible.name: text

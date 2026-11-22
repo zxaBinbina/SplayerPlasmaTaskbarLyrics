@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "1.0.1"
+VERSION = "1.1.0"
 PLUGIN_ID = "zxaBinbina.sptl"
 
 
@@ -32,12 +32,14 @@ def build():
 """
     plugin.write_text(header + (ROOT / "plugin/runtime.js").read_text())
     defaults = ".pragma library\n// Generated from shared/settings.json by tools/build.py\nvar settings = " + json.dumps({s["key"]: s["default"] for s in schema}) + ";\nvar schema = " + json.dumps(schema, ensure_ascii=False) + ";\n"
+    license_text = ".pragma library\n// Generated from LICENSE by tools/build.py\nvar text = " + json.dumps((ROOT / "LICENSE").read_text()) + ";\n"
     for version in (5, 6):
         package = dist / f"plasma{version}" / "org.kde.plasma.sptl"
         if package.exists():
             shutil.rmtree(package)
         shutil.copytree(ROOT / "plasmoid/contents", package / "contents")
         (package / "contents/ui/Defaults.js").write_text(defaults)
+        (package / "contents/ui/LicenseText.js").write_text(license_text)
         shutil.copy2(ROOT / "LICENSE", package / "LICENSE")
         shutil.copy2(ROOT / "THIRD_PARTY.md", package / "THIRD_PARTY.md")
         metadata = json.loads((ROOT / "plasmoid/metadata.json").read_text())

@@ -89,6 +89,10 @@ Item {
     onHeightChanged: Qt.callLater(function() { root.resize(true); controlsMotion.complete(); })
     Connections {
         target: bridge
+        function onPlaybackChanged() {
+            if (volumeFeedback.running && bridge.connected && bridge.playback.volume !== root.lastFeedbackVolume)
+                root.showVolumeFeedback();
+        }
         function onMotionDurationChanged() {
             if (bridge.motionDuration === 0) { root.resize(true); controlsMotion.complete(); }
         }
@@ -102,12 +106,34 @@ Item {
         } else if (bridge.settings.clickAction === "open") bridge.command("open");
         else if (bridge.settings.clickAction === "popup") popupRequested();
     }
+    property real lastFeedbackVolume: -1
+    property bool volumeFeedbackShown: false
+    function showVolumeFeedback() {
+        lastFeedbackVolume = bridge.playback.volume;
+        volumeFeedbackShown = true;
+        bridge.command("volumeOsd");
+    }
+    Timer {
+        id: volumeFeedback
+        interval: 1500
+        // Even a no-op at the volume limits should display the native OSD.
+        onTriggered: { if (bridge.connected && !root.volumeFeedbackShown) root.showVolumeFeedback(); }
+    }
     HoverHandler { id: hover }
     WheelHandler {
+        target: null
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: function(event) {
             if (bridge.connected) {
-                var delta = event.angleDelta.y || event.angleDelta.x || event.pixelDelta.y;
-                if (delta) bridge.command("volume", (delta > 0 ? 1 : -1) * 0.05);
+                var delta = event.angleDelta.y || event.angleDelta.x || event.pixelDelta.y || event.pixelDelta.x;
+                if (delta) {
+                    root.lastFeedbackVolume = bridge.playback.volume;
+                    root.volumeFeedbackShown = false;
+                    bridge.command("volume", (delta > 0 ? 1 : -1) * 0.05);
+                    volumeFeedback.restart();
+                    if ((delta < 0 && bridge.playback.volume === 0) || (delta > 0 && bridge.playback.volume === 1))
+                        root.showVolumeFeedback();
+                }
             }
             event.accepted = true;
         }
@@ -192,6 +218,7 @@ Item {
             Controls {
                 id: controlsBar
                 objectName: "taskbarControls"
+                toolTipsEnabled: false
                 bridge: root.bridge
                 sizeScale: root.controlScale
                 showFavorite: bridge.settings.hoverFavoriteEnabled !== false

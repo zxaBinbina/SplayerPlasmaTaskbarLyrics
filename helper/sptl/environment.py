@@ -155,6 +155,17 @@ class Environment:
     def toggle_favorite(self):
         self.tray.toggle()
 
+    def show_volume(self, percent):
+        # Plasma has a player-specific OSD; this never changes system volume.
+        try:
+            result = self.dbus("org.kde.osdService.mediaPlayerVolumeChanged",
+                               str(percent), "SPlayer", "multimedia-player",
+                               dest="org.kde.plasmashell", path="/org/kde/osdService")
+        except (OSError, subprocess.SubprocessError) as error:
+            raise OSError("Plasma volume OSD unavailable") from error
+        if not result:
+            raise OSError("Plasma volume OSD unavailable")
+
     def activate(self):
         # SP currently acknowledges MPRIS Raise without restoring its window.
         # Its verified tray activation runs focusMainWindow; the launcher also

@@ -9,6 +9,15 @@ from sptl.environment import Environment
 
 
 class ActivationTests(unittest.TestCase):
+    def test_volume_osd_uses_player_specific_plasma_interface(self):
+        environment = Environment()
+        with patch.object(environment, "dbus", return_value="()") as dbus:
+            environment.show_volume(55)
+        dbus.assert_called_once_with("org.kde.osdService.mediaPlayerVolumeChanged", "55", "SPlayer",
+                                     "multimedia-player", dest="org.kde.plasmashell", path="/org/kde/osdService")
+        with patch.object(environment, "dbus", return_value=""):
+            with self.assertRaises(OSError): environment.show_volume(55)
+
     def test_running_player_uses_native_tray_activation(self):
         environment = Environment()
         environment.bus_name = "org.mpris.MediaPlayer2.splayer_next.instance1"

@@ -3,7 +3,7 @@
 简称 **SPTL**。通过 SPlayer Next 官方插件 API、Python 辅助服务和 KDE Plasma 小部件，
 显示同步歌词、歌曲封面及播放控制。采用 **AGPL-3.0-only**。
 
-**1.0 正式版**：双行原文＋翻译／音译／下一句、单行歌词＋歌曲信息、
+**1.1.0 正式版**：双行原文＋翻译／音译／下一句、单行歌词＋歌曲信息、
 逐字高亮与暂停冻结、长文字横向滚动、封面左右切换、自动／固定宽度、
 悬停播放控制、滚轮音量、完整歌词与进度跳转、共享设置及中英文显示。
 歌词弹窗提供播放模式、收藏和当前播放列表；播放列表支持翻页与点击播放。
@@ -12,7 +12,7 @@
 封面加载后过渡，按钮提供悬停／按下反馈，完整歌词平滑跟随当前句。
 动画速度跟随 KDE 系统设置，也可在小部件配置中关闭“界面动画”。
 
-当前工作区含尚未发布的改动：封面可选方形、圆角方形或圆形；圆角程度为 1–49%，圆角方形不可旋转。
+1.1.0 新增：封面可选方形、圆角方形或圆形；圆角程度为 1–49%，圆角方形不可旋转。
 圆形封面可开启播放时旋转，暂停时冻结。
 没有当前歌曲、显示“未在播放”时，点击主体可选择打开 SPlayer，或播放网易云“我喜欢的音乐”。
 暂停歌曲时继续使用“点击主体”设置，默认打开完整歌词弹窗。
@@ -21,6 +21,9 @@ SPlayer 关闭时会先启动，再在插件连接后开始播放；“SP 关闭
 自动播放需要在 SPlayer 登录网易云音乐；喜欢歌曲按照原列表顺序插入当前曲目之后，
 保留 SPlayer 原有队列。私人 FM 播放时，弹窗隐藏播放模式，弹窗和悬停区的上一首替换为“不喜欢”。
 空闲、加载、停止或未连接时，悬停不显示控制按钮；已有歌曲暂停时仍可继续播放。
+鼠标／触摸板滚轮调整音量，使用 KDE 原生 OSD 显示 SPlayer 实际音量和播放器名称。
+跟随 SP 无法读取当前主题色时，在主题来源选择框下方显示警告并回退 Plasma 配色。
+原生关于页可查看完整许可证；任务栏操作按钮不显示悬浮文字。
 
 ## 安装
 
@@ -62,6 +65,7 @@ node tests/plugin.mjs
 python3 tests/qml_smoke.py
 python3 tests/qml_animation_smoke.py
 python3 tests/qml_controls_smoke.py
+python3 tests/qml_configuration_smoke.py
 python3 tests/package_smoke.py
 python3 tests/install_smoke.py
 # 在 KDE Wayland 会话验证真实的圆形裁切（需要图形后端）
@@ -78,7 +82,7 @@ QML 验证需要 PySide6 和 Plasma/Kirigami QML 模块，仅为开发检查依�
 
 ## 下载与插件市场
 
-[v1.0.1 正式版](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.0.1)
+[v1.1.0 正式版](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.1.0)
 提供 SP 插件、Plasma 5/6 安装包、完整源码及 SHA-256 校验值。
 插件信息和安装包使用项目所有者提供的图标；任务栏未播放时保留原来的 SPlayer 图标。
 

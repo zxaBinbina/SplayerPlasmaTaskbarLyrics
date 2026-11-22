@@ -6,10 +6,12 @@ Row {
     property var bridge
     property real sizeScale: 1
     property bool showFavorite: false
+    property bool toolTipsEnabled: true
     readonly property real baseWidth: showFavorite ? 118 : 88
     spacing: 2 * sizeScale
     ControlButton {
         objectName: "previousOrDislikeButton"
+        toolTipEnabled: root.toolTipsEnabled
         bridge: root.bridge
         sizeScale: root.sizeScale
         iconName: bridge.fmActive ? "dislike" : "media-skip-backward"
@@ -19,6 +21,7 @@ Row {
         text: bridge.fmActive ? bridge.tr("不喜欢（私人 FM）", "Dislike (Personal FM)") : bridge.tr("上一首", "Previous")
     }
     ControlButton {
+        toolTipEnabled: root.toolTipsEnabled
         bridge: root.bridge
         sizeScale: root.sizeScale
         iconName: bridge.playing ? "media-playback-pause" : "media-playback-start"
@@ -26,6 +29,7 @@ Row {
         text: bridge.playing ? bridge.tr("暂停", "Pause") : bridge.tr("播放", "Play")
     }
     ControlButton {
+        toolTipEnabled: root.toolTipsEnabled
         bridge: root.bridge
         sizeScale: root.sizeScale
         iconName: "media-skip-forward"
@@ -33,6 +37,7 @@ Row {
         text: bridge.tr("下一首", "Next")
     }
     FavoriteButton {
+        toolTipEnabled: root.toolTipsEnabled
         objectName: "hoverFavoriteButton"
         bridge: root.bridge
         sizeScale: root.sizeScale

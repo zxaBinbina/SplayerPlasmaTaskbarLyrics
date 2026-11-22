@@ -22,10 +22,12 @@ class FakeEnvironment:
     favorite_clicks = 0
     def __init__(self):
         self.ready = threading.Event()
+        self.volume_osds = []
     def refresh(self): self.ready.set()
     def local_cover(self, cover): return None
     def activate(self): self.launched += 1
     def toggle_favorite(self): self.favorite_clicks += 1
+    def show_volume(self, percent): self.volume_osds.append(percent)
 
 
 class HttpTests(unittest.TestCase):
@@ -77,6 +79,36 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.env.launched, 1)
         self.assertEqual(self.request("POST", "/exchange", [1, 2])[0], 400)
         self.assertEqual(self.request("POST", "/command", {"token": state["token"], "action": "unknown"})[0], 400)
+
+    def test_volume_osd_uses_actual_sp_volume_and_requires_connected_authorized_client(self):
+        _, state = self.request("GET", "/state")
+        body = {"token": state["token"], "action": "volumeOsd", "value": 99}
+        self.assertEqual(self.request("POST", "/command", body)[0], 400)
+        for volume, percent in ((0, 0), (.555, 56), (1, 100)):
+            data = snapshot()
+            data["playback"]["volume"] = volume
+            self.request("POST", "/exchange", data)
+            self.assertEqual(self.request("POST", "/command", dict(body, token="wrong"))[0], 403)
+            self.assertEqual(self.request("POST", "/command", body, {"X-SPTL-Client": "plugin"})[0], 403)
+            self.assertEqual(self.request("POST", "/command", body)[0], 200)
+            self.assertEqual(self.env.volume_osds[-1], percent)
+        self.assertEqual(self.server.state.commands, [], "OSD is local, not a player command")
+        with patch.object(self.env, "show_volume", side_effect=OSError("OSD unavailable")):
+            self.assertEqual(self.request("POST", "/command", body)[0], 503)
+
+    def test_volume_osd_dbus_does_not_block_playback(self):
+        self.request("POST", "/exchange", snapshot())
+        started, release = threading.Event(), threading.Event()
+        def delayed(percent): started.set(); release.wait(3)
+        self.env.show_volume = delayed
+        worker = threading.Thread(target=lambda: self.request("POST", "/command", {
+            "token": self.server.token, "action": "volumeOsd"}))
+        worker.start()
+        try:
+            self.assertTrue(started.wait(1))
+            self.assertEqual(self.request("GET", "/state")[0], 200)
+        finally:
+            release.set(); worker.join()
 
     def test_liked_start_launches_then_delivers_after_plugin_connects(self):
         _, state = self.request("GET", "/state")

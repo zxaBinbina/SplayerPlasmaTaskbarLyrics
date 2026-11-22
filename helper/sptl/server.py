@@ -200,6 +200,10 @@ class Handler(BaseHTTPRequestHandler):
                         self.server.state.pending_start = self.server.state.clock()
                     elif action in ("launch", "open"):
                         pass
+                    elif action == "volumeOsd":
+                        if not self.server.state.connected:
+                            raise ValueError("plugin disconnected")
+                        percent = int(self.server.state.playback["volume"] * 100 + 0.5)
                     elif action == "favorite":
                         state = self.server.state
                         value = data.get("value")
@@ -223,6 +227,11 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/command" and action == "favorite":
                 # D-Bus must not block playback snapshots behind the state lock.
                 self.server.environment.toggle_favorite()
+                return self.respond(200, {"ok": True})
+            if parsed.path == "/command" and action == "volumeOsd":
+                # The percentage comes from SP's snapshot, never the caller.
+                # Keep desktop D-Bus IO outside the playback lock.
+                self.server.environment.show_volume(percent)
                 return self.respond(200, {"ok": True})
             return self.respond(404, {"error": "not found"})
         except (ValueError, TypeError, OverflowError) as error:
