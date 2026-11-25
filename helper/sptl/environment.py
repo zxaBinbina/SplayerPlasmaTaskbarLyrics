@@ -155,6 +155,24 @@ class Environment:
     def toggle_favorite(self):
         self.tray.toggle()
 
+    def set_volume(self, volume):
+        """Set SP's player volume through its native MPRIS interface when available."""
+        if not self.bus_name:
+            try:
+                names = self.dbus("org.freedesktop.DBus.ListNames")
+                matches = re.findall(r"'(" + re.escape(MPRIS_PREFIX) + r"[^']*)'", names)
+                self.bus_name = sorted(matches)[0] if matches else None
+            except (OSError, subprocess.SubprocessError):
+                return False
+        if not self.bus_name:
+            return False
+        try:
+            return bool(self.dbus("org.freedesktop.DBus.Properties.Set",
+                                  "org.mpris.MediaPlayer2.Player", "Volume", f"<{volume:.9f}>",
+                                  dest=self.bus_name, path="/org/mpris/MediaPlayer2"))
+        except (OSError, subprocess.SubprocessError):
+            return False
+
     def show_volume(self, percent):
         # Plasma has a player-specific OSD; this never changes system volume.
         data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))

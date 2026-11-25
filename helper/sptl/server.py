@@ -36,6 +36,7 @@ class BridgeServer(ThreadingHTTPServer):
         self.lock = threading.RLock()
         self.volume_osd_lock = threading.Lock()
         self.volume_sequences = {}
+        self.pending_native_volumes = {}
         self.token = secrets.token_urlsafe(32)
         self.monitor_stop = threading.Event()
         self.monitor = None
@@ -147,11 +148,12 @@ class Handler(BaseHTTPRequestHandler):
                 query = parse_qs(parsed.query)
                 revision = str(self.server.state.content_revision)
                 state = self.server.state
+                pending_volume = max((c for c in (*state.commands, *self.server.pending_native_volumes.values())
+                    if c["action"] == "setVolume" and state.clock() - c["created"] < 3),
+                    key=lambda c: c["id"], default=None)
                 result = {"protocol": 1, "revision": state.content_revision,
                           "token": self.server.token, "playback": state.playback,
-                          "pendingVolume": next((c["value"] for c in reversed(state.commands)
-                              if c["action"] == "setVolume" and state.clock() - c["created"] < 3), None)
-                              if state.connected else None,
+                          "pendingVolume": pending_volume["value"] if state.connected and pending_volume else None,
                           "serverTime": int(time.time() * 1000)}
                 if query.get("revision", ["-1"])[0] != revision:
                     result["content"] = state.content()
@@ -209,7 +211,8 @@ class Handler(BaseHTTPRequestHandler):
                         if not self.server.state.connected:
                             raise ValueError("plugin disconnected")
                         percent = int(self.server.state.playback["volume"] * 100 + 0.5)
-                    elif action == "setVolume" and data.get("osd") is True:
+                    elif action == "setVolume":
+                        show_osd = data.get("osd") is True
                         volume_client, volume_sequence = data.get("volumeClient"), data.get("volumeSequence")
                         ordered_volume = volume_client is not None or volume_sequence is not None
                         if ordered_volume:
@@ -219,7 +222,11 @@ class Handler(BaseHTTPRequestHandler):
                             if volume_sequence <= self.server.volume_sequences.get(volume_client, 0):
                                 return self.respond(200, {"id": None, "osd": False, "superseded": True})
                         command_id = self.server.state.command(action, data.get("value"))
-                        percent = int(self.server.state.commands[-1]["value"] * 100 + 0.5)
+                        # Reserve a validated command, but do not expose it to
+                        # the plugin while native control is being attempted.
+                        volume_command = self.server.state.commands.pop()
+                        self.server.pending_native_volumes[command_id] = volume_command
+                        percent = int(volume_command["value"] * 100 + 0.5)
                         if ordered_volume:
                             if volume_client not in self.server.volume_sequences and len(self.server.volume_sequences) >= 256:
                                 self.server.volume_sequences.pop(next(iter(self.server.volume_sequences)))
@@ -255,17 +262,35 @@ class Handler(BaseHTTPRequestHandler):
                     self.server.environment.show_volume(percent)
                 return self.respond(200, {"ok": True})
             if parsed.path == "/command" and action == "setVolume":
-                # Every input queues its target before desktop IO, and displays
-                # that same target without waiting for SP to apply it.
+                # Serialize native operations without blocking playback polls.
+                # A successful native write never enters the plugin mailbox.
                 with self.server.volume_osd_lock:
                     with self.server.lock:
-                        shown = not ordered_volume or volume_sequence == self.server.volume_sequences.get(volume_client)
+                        current = not ordered_volume or volume_sequence == self.server.volume_sequences.get(volume_client)
+                        fallback_pending = any(c["action"] in ("volume", "setVolume") for c in self.server.state.commands)
+                    native = False
+                    if current and not fallback_pending:
+                        try:
+                            setter = getattr(self.server.environment, "set_volume", None)
+                            native = bool(setter and setter(volume_command["value"]))
+                        except OSError:
+                            native = False
+                    with self.server.lock:
+                        current = not ordered_volume or volume_sequence == self.server.volume_sequences.get(volume_client)
+                        self.server.pending_native_volumes.pop(command_id, None)
+                        if current:
+                            if native:
+                                self.server.state.playback["volume"] = volume_command["value"]
+                            else:
+                                volume_command["created"] = self.server.state.clock()
+                                self.server.state.commands.append(volume_command)
+                    shown = current and show_osd
                     if shown:
                         try:
                             self.server.environment.show_volume(percent)
                         except OSError:
                             shown = False  # Playback was accepted even if the OSD failed.
-                return self.respond(200, {"id": command_id, "osd": shown})
+                return self.respond(200, {"id": command_id, "osd": shown, "native": native})
             return self.respond(404, {"error": "not found"})
         except (ValueError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})

@@ -10,6 +10,31 @@ from sptl.environment import Environment
 
 
 class ActivationTests(unittest.TestCase):
+    def test_native_volume_uses_mpris_player_volume_property(self):
+        environment = Environment()
+        environment.bus_name = "org.mpris.MediaPlayer2.splayer_next.instance1"
+        with patch.object(environment, "dbus", return_value="()") as dbus:
+            self.assertTrue(environment.set_volume(.55))
+        dbus.assert_called_once_with("org.freedesktop.DBus.Properties.Set",
+            "org.mpris.MediaPlayer2.Player", "Volume", "<0.550000000>",
+            dest=environment.bus_name, path="/org/mpris/MediaPlayer2")
+        with patch.object(environment, "dbus", return_value=""):
+            self.assertFalse(environment.set_volume(.55))
+        with patch.object(environment, "dbus", side_effect=OSError("No media bus")):
+            self.assertFalse(environment.set_volume(.55))
+
+    def test_native_volume_discovers_only_the_splayer_mpris_service(self):
+        environment = Environment()
+        with patch.object(environment, "dbus", side_effect=[
+            "(['org.mpris.MediaPlayer2.vlc', 'org.mpris.MediaPlayer2.splayer_next.instance2'],)", "()"
+        ]) as dbus:
+            self.assertTrue(environment.set_volume(0))
+        self.assertEqual(dbus.call_args.kwargs["dest"], "org.mpris.MediaPlayer2.splayer_next.instance2")
+        environment.bus_name = None
+        with patch.object(environment, "dbus", return_value="(['org.mpris.MediaPlayer2.vlc'],)") as dbus:
+            self.assertFalse(environment.set_volume(.55))
+        self.assertEqual(dbus.call_count, 1)
+
     def test_volume_osd_uses_player_specific_plasma_interface(self):
         environment = Environment()
         icon = Path(__file__).resolve().parents[1] / "plasmoid/contents/images/splayer.svg"

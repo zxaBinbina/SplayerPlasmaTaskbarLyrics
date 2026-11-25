@@ -4,6 +4,7 @@ import json
 import sys
 import threading
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -185,6 +186,82 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(self.server.state.commands[-1]["value"], .6)
         finally:
             release.set(); worker.join()
+
+    def test_native_volume_applies_each_target_without_plugin_commands(self):
+        data = snapshot()
+        data["playback"]["volume"] = .5
+        self.request("POST", "/exchange", data)
+        values = []
+        self.env.set_volume = lambda value: values.append(value) or True
+        body = {"token": self.server.token, "action": "setVolume", "osd": True,
+                "volumeClient": "native-widget"}
+        for sequence, value in enumerate((.55, .6, .65), 1):
+            status, response = self.request("POST", "/command", dict(body, value=value, volumeSequence=sequence))
+            self.assertEqual(status, 200)
+            self.assertTrue(response["native"])
+            self.assertEqual(self.server.state.commands, [])
+            state = self.request("GET", "/state")[1]
+            self.assertEqual(state["playback"]["volume"], value)
+            self.assertIsNone(state["pendingVolume"])
+        self.assertEqual(values, [.55, .6, .65])
+        self.assertEqual(self.env.volume_osds, [55, 60, 65])
+        self.request("POST", "/command", dict(body, value=.7, volumeSequence=4, osd=False))
+        self.assertEqual(values[-1], .7, "the popup slider must also use native volume")
+        self.assertEqual(self.env.volume_osds, [55, 60, 65], "the popup slider does not request an OSD")
+
+    def test_slow_native_volume_preserves_latest_prediction_and_never_blocks_playback(self):
+        self.request("POST", "/exchange", snapshot())
+        started, release = threading.Event(), threading.Event()
+        values, results = [], []
+        def delayed(value):
+            values.append(value)
+            if value == .55:
+                started.set(); release.wait(2)
+            return True
+        self.env.set_volume = delayed
+        body = {"token": self.server.token, "action": "setVolume", "osd": True, "volumeClient": "rapid"}
+        first = threading.Thread(target=lambda: results.append(self.request("POST", "/command",
+            dict(body, value=.55, volumeSequence=1))))
+        second = threading.Thread(target=lambda: results.append(self.request("POST", "/command",
+            dict(body, value=.65, volumeSequence=2))))
+        first.start()
+        try:
+            self.assertTrue(started.wait(1))
+            second.start()
+            for _ in range(50):
+                state = self.request("GET", "/state")[1]
+                if state["pendingVolume"] == .65: break
+                time.sleep(.01)
+            self.assertEqual(state["pendingVolume"], .65)
+            self.assertEqual(self.server.state.commands, [], "native targets must not leak into the plugin mailbox")
+        finally:
+            release.set(); first.join()
+            if second.ident is not None: second.join()
+        self.assertEqual(values, [.55, .65])
+        self.assertEqual(self.env.volume_osds, [65], "a superseded slow request must not display its old value")
+        self.assertEqual(len(results), 2)
+        self.assertTrue(all(status == 200 for status, _ in results))
+        self.assertEqual(self.server.state.playback["volume"], .65)
+
+    def test_native_failure_keeps_plugin_volume_order_until_fallback_commands_are_acknowledged(self):
+        data = snapshot()
+        self.request("POST", "/exchange", data)
+        body = {"token": self.server.token, "action": "setVolume", "osd": True}
+        with patch.object(self.env, "set_volume", side_effect=OSError("MPRIS disabled"), create=True):
+            response = self.request("POST", "/command", dict(body, value=.55))[1]
+        self.assertFalse(response["native"])
+        with patch.object(self.env, "set_volume", return_value=True, create=True) as native:
+            response = self.request("POST", "/command", dict(body, value=.6))[1]
+            self.assertFalse(response["native"])
+            native.assert_not_called()
+            self.assertEqual([c["value"] for c in self.server.state.commands], [.55, .6])
+            data["ack"] = [c["id"] for c in self.server.state.commands]
+            data["playback"]["volume"] = .6
+            self.request("POST", "/exchange", data)
+            response = self.request("POST", "/command", dict(body, value=.65))[1]
+            self.assertTrue(response["native"])
+            native.assert_called_once_with(.65)
+            self.assertEqual(self.server.state.commands, [])
 
     def test_liked_start_launches_then_delivers_after_plugin_connects(self):
         _, state = self.request("GET", "/state")

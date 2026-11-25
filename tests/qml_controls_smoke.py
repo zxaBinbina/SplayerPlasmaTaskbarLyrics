@@ -115,6 +115,8 @@ Window {{
             server.state.exchange(data)
         expression(bridge, "revision = -1; poll()")
         pump(100)
+        until(lambda: bridge.property("revision") == server.state.content_revision and
+              expression(bridge, "playback.state") == data["playback"]["state"])
 
     def page(request, offset):
         data["queue"] = dict(available=True, tracks=tracks[offset:offset+50], total=len(tracks),

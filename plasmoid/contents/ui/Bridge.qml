@@ -126,7 +126,7 @@ Item {
         request.setRequestHeader("Content-Type", "application/json");
         request.setRequestHeader("X-SPTL-Client", "plasma");
         var payload = { token: token, action: action, value: value === undefined ? null : value, osd: osd === true };
-        if (action === "setVolume" && osd === true) {
+        if (action === "setVolume") {
             payload.volumeClient = volumeClient;
             payload.volumeSequence = ++volumeSequence;
         }
