@@ -23,10 +23,17 @@ Item {
     property var pending: null
     property double pendingSince: 0
     property string lastError: ""
+    property int commandSerial: 0
+    property int errorSerial: 0
+    property var requestRecords: []
+    property var outgoingRequests: ({})
+    property var commandResults: []
+    signal commandFinished(int requestId, string action, bool success)
     property bool savingSettings: false
-    readonly property var settings: content.settings
+    readonly property var settings: Object.assign({}, Defaults.settings, content.settings)
     readonly property int motionDuration: settings.animationsEnabled === false ? 0 : Kirigami.Units.longDuration
     readonly property int quickDuration: settings.animationsEnabled === false ? 0 : Kirigami.Units.shortDuration
+    readonly property bool instantFeedback: settings.instantFeedback !== false
     readonly property var track: content.track
     readonly property var lines: content.lines
     readonly property var queue: content.queue || ({available: false, tracks: [], total: 0, currentIndex: -1, offset: 0, requestId: 0, error: ""})
@@ -34,7 +41,11 @@ Item {
     readonly property bool fmActive: connected && content.fmActive === true
     readonly property bool fmAvailable: connected && content.fmAvailable === true
     readonly property bool favoriteAvailable: !!content.favorite && content.favorite.available === true
-    readonly property bool favoriteLiked: !!content.favorite && content.favorite.liked === true
+    readonly property bool favoriteLiked: feedbackValue("favorite", !!content.favorite && content.favorite.liked === true)
+    readonly property string playbackState: feedbackValue("state", playback.state)
+    readonly property string playbackMode: feedbackValue("mode", Logic.playMode(playback))
+    readonly property int queueSelectionIndex: feedbackValue("selection", null) === null ? queue.currentIndex : feedbackValue("selection", null).index
+    readonly property real volume: feedbackValue("volume", playback.volume === undefined ? 1 : playback.volume)
     readonly property string actionError: content.commandError === "queue_changed" ?
         tr("播放列表已改变，请刷新后重试", "The playlist changed; refresh and try again") :
         content.commandError === "queue_unavailable" ? tr("此版本 SP 不支持读取播放列表", "This SP version cannot read the playlist") :
@@ -49,11 +60,10 @@ Item {
     onQueueResponseIdChanged: queueLoading = false
     readonly property bool running: reachable && content.running
     readonly property bool connected: reachable && content.pluginConnected
-    readonly property bool playing: connected && playback.state === "playing"
+    readonly property bool playing: connected && playbackState === "playing"
     readonly property bool hidden: !running && settings.offlineDisplay === "hidden"
     readonly property bool chinese: String(content.locale).toLowerCase().indexOf("zh") === 0
-    readonly property real position: Math.max(0, Math.min(playback.duration > 0 ? playback.duration : Infinity,
-        playback.position + (playing ? Math.max(0, clockMs - playback.timestamp) * playback.speed : 0)))
+    readonly property real position: projectedPosition()
     readonly property real lyricPosition: position + playback.offset
     readonly property int currentIndex: Logic.currentIndex(lines, lyricPosition)
     readonly property var theme: content.theme || ({ available: false })
@@ -77,6 +87,87 @@ Item {
         return "../images/placeholder.svg";
     }
     function tr(zh, en) { return chinese ? zh : en; }
+    function trackKey(track) {
+        return track ? JSON.stringify([track.id, track.source || "", track.path || ""]) : "";
+    }
+    function feedbackSlot(action) {
+        return action === "toggle" ? "state" : action === "queuePlay" ? "selection" :
+            action === "setVolume" ? "volume" : ["prev", "next", "dislike", "startLiked"].indexOf(action) >= 0 ? "navigation" : action;
+    }
+    function feedbackRecord(slot) {
+        if (!instantFeedback) return null;
+        for (var i = requestRecords.length - 1; i >= 0; --i) {
+            var record = requestRecords[i];
+            if (record.slot === slot && (!record.trackBound || record.track === trackKey(track))) return record;
+        }
+        return null;
+    }
+    function feedbackValue(slot, fallback) {
+        var record = feedbackRecord(slot);
+        return record ? record.value : fallback;
+    }
+    function actionPending(action) {
+        if (!instantFeedback) return false;
+        return requestRecords.some(function(record) {
+            return record.action === action && (!record.trackBound || record.track === trackKey(bridge.track));
+        });
+    }
+    function projectedPosition() {
+        var source = feedbackRecord("seek"), state = feedbackRecord("state");
+        if (state && state.track !== trackKey(track)) state = null;
+        if (state && (!source || state.id > source.id)) source = state;
+        var base = source ? source.slot === "seek" ? source.value : source.position : playback.position;
+        var timestamp = source ? source.at : playback.timestamp;
+        return Math.max(0, Math.min(playback.duration > 0 ? playback.duration : Infinity,
+            base + (playing ? Math.max(0, clockMs - timestamp) * playback.speed : 0)));
+    }
+    function feedbackConfirmed(record) {
+        if (!record.complete) return false;
+        if (record.outcomeConfirmed && record.slot === "volume") return true;
+        if (record.slot === "state") return playback.state === record.value;
+        if (record.slot === "favorite") return !!content.favorite && content.favorite.liked === record.value;
+        if (record.slot === "mode") return Logic.playMode(playback) === record.value;
+        if (record.slot === "seek") return Math.abs(playback.position - record.value) < 750;
+        if (record.slot === "selection") return queue.currentIndex === record.value.index && trackKey(track) === trackKey(record.value);
+        if (record.slot === "volume") return pendingVolume === null && Math.abs(playback.volume - record.value) < 0.00001;
+        return Date.now() - record.at >= 160;
+    }
+    function failCommand(id, action) {
+        clockMs = Date.now();
+        requestRecords = requestRecords.filter(function(record) { return record.id !== id; });
+        if (id >= errorSerial) {
+            errorSerial = id;
+            lastError = tr("操作失败，请检查 SP 与辅助程序", "Action failed; check SP and the bridge");
+        }
+        if (action === "queue") queueLoading = false;
+        commandFinished(id, action, false);
+    }
+    function settleFeedback() {
+        var failures = [], confirmed = {}, now = Date.now();
+        requestRecords = requestRecords.map(function(record) {
+            var outcome = commandResults.find(function(result) { return result.id === record.serverId; });
+            if (outcome && !outcome.ok) failures.push(record);
+            if (outcome && outcome.ok) record = Object.assign({}, record, {complete: true, outcomeConfirmed: true});
+            if (record.status === "accepted" && feedbackConfirmed(record))
+                confirmed[record.slot] = Math.max(confirmed[record.slot] || 0, record.id);
+            return record;
+        }).filter(function(record) {
+            return (!record.trackBound || record.track === trackKey(track)) && record.id > (confirmed[record.slot] || 0);
+        });
+        failures.forEach(function(record) { bridge.failCommand(record.id, record.action); });
+        Object.keys(outgoingRequests).forEach(function(id) {
+            var entry = outgoingRequests[id];
+            if (now - entry.at > 3000) {
+                delete outgoingRequests[id]; entry.request.abort();
+                bridge.failCommand(Number(id), entry.action);
+            }
+        });
+        requestRecords.slice().forEach(function(record) {
+            if (record.status === "accepted" && now - record.at > 15000) {
+                bridge.failCommand(record.id, record.action);
+            }
+        });
+    }
     function statusText() {
         if (!reachable) return tr("歌词辅助程序未连接", "Lyrics bridge unavailable");
         if (!running) return tr("SPlayer Next 未运行", "SPlayer Next is closed");
@@ -102,10 +193,12 @@ Item {
                     if (result.content) content = result.content;
                     pendingVolume = result.pendingVolume === undefined ? null : result.pendingVolume;
                     playback = result.playback;
+                    commandResults = result.commandResults || [];
                     revision = result.revision;
                     token = result.token;
                     lastSuccess = Date.now();
                     reachable = true;
+                    settleFeedback();
                 } catch (error) { revision = -1; }
             }
         };
@@ -113,30 +206,56 @@ Item {
         request.send();
     }
     function command(action, value, osd) {
-        if (!token) { lastError = statusText(); return; }
+        var id = ++commandSerial;
+        if (!token) {
+            lastError = statusText();
+            Qt.callLater(function() { bridge.commandFinished(id, action, false); });
+            return id;
+        }
+        if (action === "toggle") value = playing ? "paused" : "playing";
+        var preview = action === "favorite" ? !favoriteLiked : value;
+        var record = {id: id, action: action, slot: feedbackSlot(action), value: preview,
+                      at: Date.now(), position: position, track: trackKey(track),
+                      trackBound: ["favorite", "seek", "queuePlay", "prev", "next", "dislike"].indexOf(action) >= 0,
+                      status: "sending", serverId: -1, complete: false};
+        requestRecords = requestRecords.concat([record]);
         var request = new XMLHttpRequest();
+        outgoingRequests[id] = {request: request, at: record.at, action: action};
         request.onreadystatechange = function() {
-            if (request.readyState === XMLHttpRequest.DONE) {
-                if (action === "queue" && request.status !== 200) queueLoading = false;
-                lastError = request.status === 200 ? "" :
-                    tr("操作失败，请检查 SP 与辅助程序", "Action failed; check SP and the bridge");
-            }
+            if (request.readyState !== XMLHttpRequest.DONE || !outgoingRequests[id] || outgoingRequests[id].request !== request) return;
+            delete outgoingRequests[id];
+            var response = null;
+            try { if (request.status === 200) response = JSON.parse(request.responseText); } catch (error) {}
+            if (!response) { bridge.failCommand(id, action); return; }
+            if (id >= errorSerial) { errorSerial = id; lastError = ""; }
+            if (response.superseded) requestRecords = requestRecords.filter(function(entry) { return entry.id !== id; });
+            else requestRecords = requestRecords.map(function(entry) {
+                return entry.id === id ? Object.assign({}, entry, {status: "accepted", serverId: response.id || -1,
+                    complete: response.native === true || response.ok === true}) : entry;
+            });
+            bridge.commandFinished(id, action, true);
+            bridge.settleFeedback();
+            bridge.poll();
         };
         request.open("POST", endpoint + "/command");
         request.setRequestHeader("Content-Type", "application/json");
         request.setRequestHeader("X-SPTL-Client", "plasma");
-        var payload = { token: token, action: action, value: value === undefined ? null : value, osd: osd === true };
+        var payload = { token: token, action: action, value: value === undefined ? null : value, osd: osd === true,
+                        inputClient: volumeClient, inputSequence: id };
+        if (action === "favorite") payload.favoriteLiked = preview;
+        if (action === "seek" && track) payload.targetTrack = {id: track.id, source: track.source || "", path: track.path || ""};
         if (action === "setVolume") {
             payload.volumeClient = volumeClient;
             payload.volumeSequence = ++volumeSequence;
         }
         request.send(JSON.stringify(payload));
+        return id;
     }
     function requestQueue(offset) {
-        if (!connected || queueLoading) return;
+        if (!connected || queueLoading) return -1;
         queueLoading = true;
         queueRequestedAt = Date.now();
-        command("queue", offset === undefined ? -1 : offset);
+        return command("queue", offset === undefined ? -1 : offset);
     }
     function saveSettings(changes, callback) {
         if (!reachable || !token || savingSettings) return false;
@@ -157,6 +276,10 @@ Item {
         return true;
     }
     Timer {
+        interval: 80; running: bridge.requestRecords.length > 0 || Object.keys(bridge.outgoingRequests).length > 0; repeat: true
+        onTriggered: bridge.settleFeedback()
+    }
+    Timer {
         interval: 500; running: true; repeat: true
         onTriggered: {
             bridge.poll();
@@ -173,5 +296,8 @@ Item {
     }
     onPlaybackChanged: clockMs = Date.now()
     Component.onCompleted: poll()
-    Component.onDestruction: { if (pending) pending.abort(); }
+    Component.onDestruction: {
+        if (pending) pending.abort();
+        Object.keys(outgoingRequests).forEach(function(id) { outgoingRequests[id].request.abort(); });
+    }
 }

@@ -11,7 +11,7 @@
   let track = null, lines = [], lyricRevision = 0, sentRevision = -1;
   let state = "idle", position = 0, duration = 0, speed = 1, offset = 0, volume = 1;
   let index = -1, busy = false, generation = 0, warned = false;
-  let acknowledgements = [];
+  let acknowledgements = [], executionResults = [], lastFinishedCommand = 0;
   const modeAvailable = typeof splayer.player.setPlayMode === "function";
   const queueAvailable = typeof splayer.player.getQueue === "function";
   const fmAvailable = queueAvailable && !!splayer.api && typeof splayer.api.call === "function";
@@ -22,7 +22,7 @@
   let repeat = "list", shuffle = "off", commandError = "";
   const handled = new Set();
   const pendingCommands = new Set();
-  let commandChain = Promise.resolve();
+  const commandChains = {};
   const number = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const sameTrack = (a, b) => !!a && !!b && ["id", "source", "path"].every(key => String(a[key] || "") === String(b[key] || ""));
   async function readFm(now, status) {
@@ -122,20 +122,43 @@
     handled.add(command.id);
     if (handled.size > 256) handled.delete(handled.values().next().value);
     pendingCommands.add(command.id);
-    // Queue IPC can take several seconds. Keep playback exchanges running and
-    // serialize commands without acknowledging an unfinished operation.
-    commandChain = commandChain.then(async () => {
+    // Independent controls must not wait for slow queue/network operations.
+    // Keep mutations of the same player state ordered.
+    const lane = command.action === "queue" ? "queue" :
+      ["prev", "next", "seek", "dislike", "queuePlay", "startLiked"].includes(command.action) ? "navigation" :
+      command.action === "mode" ? "mode" :
+      ["volume", "setVolume"].includes(command.action) ? "volume" : "playback";
+    const dependencies = [commandChains[lane] || Promise.resolve()];
+    if (command.action === "startLiked") dependencies.push(commandChains.mode || Promise.resolve());
+    const task = Promise.all(dependencies).then(async () => {
       try { await execute(command); }
       finally { pendingCommands.delete(command.id); }
+    }).catch(() => {
+      // A malformed host rejection must not poison this lane's next request.
+      pendingCommands.delete(command.id);
+      executionResults.push({id: command.id, ok: false, error: "control_failed"});
+      acknowledgements.push(command.id);
+      if (command.id >= lastFinishedCommand) { lastFinishedCommand = command.id; commandError = "control_failed"; }
     });
+    commandChains[lane] = task;
+    if (command.action === "startLiked") commandChains.mode = task;
   }
   async function execute(command) {
-    commandError = "";
+    let errorCode = "";
     try { switch (command.action) {
       case "prev": splayer.player.prev(); break;
       case "next": splayer.player.next(); break;
-      case "toggle": state === "playing" ? splayer.player.pause() : splayer.player.play(); break;
+      case "toggle": {
+        const nextState = command.value === "playing" || command.value === "paused" ? command.value :
+          state === "playing" ? "paused" : "playing";
+        nextState === "paused" ? splayer.player.pause() : splayer.player.play();
+        state = nextState;
+        generation++;
+        break;
+      }
       case "seek":
+        if (command.targetTrack && !sameTrack((await splayer.player.getNowPlaying()).track, command.targetTrack))
+          throw new Error("control_failed");
         if (Number.isFinite(command.value)) splayer.player.seek(Math.max(0, command.value));
         break;
       case "volume":
@@ -183,11 +206,13 @@
         break;
       }
     } } catch (error) {
-      commandError = ["queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable", "fm_changed"].includes(error.message) ?
+      errorCode = ["queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable", "fm_changed"].includes(error.message) ?
         error.message : error.code === "PERMISSION_DENIED" || error.code === "GRANT_DENIED" ? "start_unavailable" : "control_failed";
       if (command.action === "queue")
         queue = {...queue, requestId: command.id, error: "unavailable"};
     }
+    if (command.id >= lastFinishedCommand) { lastFinishedCommand = command.id; commandError = errorCode; }
+    executionResults.push({id: command.id, ok: !errorCode, error: errorCode});
     acknowledgements.push(command.id);
   }
   async function exchange() {
@@ -213,6 +238,7 @@
       queue = {...queue, currentIndex: number(status.currentIndex, queue.currentIndex)};
       const revision = lyricRevision;
       const ack = acknowledgements.slice();
+      const results = executionResults.slice();
       const payload = {
         protocol: 1, session, locale, lyricRevision: revision,
         playback: {
@@ -226,7 +252,7 @@
       const response = await splayer.request("http://127.0.0.1:43827/exchange", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-SPTL-Client": "plugin" },
-        body: JSON.stringify({ ...payload, ack }),
+        body: JSON.stringify({ ...payload, ack, results }),
         responseType: "json", timeout: 1500
       });
       if (response.status !== 200 || !response.body || response.body.protocol !== 1)
@@ -236,6 +262,7 @@
       }
       warned = false;
       acknowledgements = acknowledgements.filter((id) => !ack.includes(id));
+      executionResults = executionResults.filter(result => !results.some(sent => sent.id === result.id));
       sentRevision = response.body.needLines ? -1 : revision;
       for (const command of response.body.commands || []) dispatch(command);
     } catch (error) {

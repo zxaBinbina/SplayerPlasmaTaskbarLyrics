@@ -10,7 +10,9 @@ Rectangle {
     property bool following: true
     property bool playlistShown: false
     property real pendingVolume: -1
-    readonly property string playbackMode: Logic.playMode(bridge.playback)
+    property int volumeRequestId: -1
+    property int playlistRequestId: -1
+    readonly property string playbackMode: bridge.playbackMode === undefined ? Logic.playMode(bridge.playback) : bridge.playbackMode
     implicitWidth: 480
     implicitHeight: 560
     Layout.minimumWidth: 320
@@ -45,13 +47,19 @@ Rectangle {
         }
         function onMotionDurationChanged() { if (bridge.motionDuration === 0) scrollMotion.complete(); }
         function onFmActiveChanged() { if (bridge.fmActive) modeMenu.close(); }
+        function onCommandFinished(requestId, action, success) {
+            if (!success && bridge.instantFeedback !== false && action === "queue" && requestId === root.playlistRequestId) root.playlistShown = false;
+            if (!success && action === "setVolume" && requestId === root.volumeRequestId) {
+                volumeHold.stop(); volumeCommit.stop(); root.pendingVolume = -1;
+            }
+        }
     }
     onVisibleChanged: {
         if (visible) { following = true; Qt.callLater(function() { root.follow(true); }); }
         else { scrollMotion.stop(); resume.stop(); playlistShown = false; }
     }
     onPlaylistShownChanged: {
-        if (playlistShown) { scrollMotion.stop(); bridge.requestQueue(); }
+        if (playlistShown) { scrollMotion.stop(); playlistRequestId = bridge.requestQueue(); }
         else Qt.callLater(function() { root.follow(true); });
     }
     Timer {
@@ -63,7 +71,7 @@ Rectangle {
     function commitVolume() {
         volumeCommit.stop();
         if (pendingVolume < 0 || !bridge.connected) return;
-        bridge.command("setVolume", pendingVolume);
+        volumeRequestId = bridge.command("setVolume", pendingVolume);
         pendingVolume = -1;
         volumeHold.restart();
     }
@@ -110,6 +118,7 @@ Rectangle {
                 objectName: "openSPlayerButton"
                 text: bridge.tr("打开 SPlayer", "Open SPlayer")
                 enabled: bridge.reachable
+                highlighted: typeof bridge.actionPending === "function" && bridge.actionPending("open")
                 onClicked: bridge.command("open")
             }
         }
@@ -215,6 +224,7 @@ Rectangle {
             ControlButton {
                 id: modeButton
                 objectName: "playbackModeButton"
+                feedbackAction: "mode"
                 visible: !bridge.fmActive
                 bridge: root.bridge
                 iconName: root.playbackMode === "shuffle" ? "shuffle" : root.playbackMode === "one" ? "repeat-one" : "repeat"
@@ -250,6 +260,7 @@ Rectangle {
             FavoriteButton { objectName: "popupFavoriteButton"; bridge: root.bridge }
             ControlButton {
                 objectName: "playlistButton"
+                feedbackAction: "queue"
                 bridge: root.bridge
                 iconName: "playlist"
                 checked: root.playlistShown
@@ -276,7 +287,7 @@ Rectangle {
                 Accessible.name: bridge.tr("SPlayer 音量", "SPlayer volume")
                 Binding {
                     target: volume; property: "value"
-                    value: bridge.playback.volume === undefined ? 1 : bridge.playback.volume
+                    value: bridge.volume === undefined ? bridge.playback.volume === undefined ? 1 : bridge.playback.volume : bridge.volume
                     when: !volume.pressed && !volumeCommit.running && !volumeHold.running
                     restoreMode: Binding.RestoreNone
                 }

@@ -64,6 +64,24 @@ class ModelTests(unittest.TestCase):
         for value in (True, None, "0.5", float("nan")):
             with self.assertRaises(ValueError): self.state.command("setVolume", value)
 
+    def test_explicit_playback_state_and_correlated_outcomes(self):
+        self.state.exchange(snapshot(modeAvailable=True))
+        pause = self.state.command("toggle", "paused")
+        mode = self.state.command("mode", "one")
+        data = snapshot(modeAvailable=True, ack=[pause, mode], results=[
+            {"id": pause, "ok": True, "error": ""},
+            {"id": mode, "ok": False, "error": "control_failed"}])
+        self.state.exchange(data)
+        self.assertEqual(self.state.command_results, [
+            {"id": pause, "ok": True, "error": ""},
+            {"id": mode, "ok": False, "error": "control_failed"}])
+        self.assertEqual(self.state.commands, [])
+        self.state.exchange(data)
+        self.assertEqual(len(self.state.command_results), 2, "repeated outcomes must not change a settled request")
+        for value in (True, "unknown", 1):
+            with self.assertRaises(ValueError): self.state.command("toggle", value)
+        with self.assertRaises(ValueError): self.state.exchange(snapshot(results=[{"id": 1, "ok": "true"}]))
+
     def test_pending_liked_start_survives_handshake_once_and_expires(self):
         self.state.pending_start = self.now
         response = self.state.exchange(snapshot(startAvailable=True))

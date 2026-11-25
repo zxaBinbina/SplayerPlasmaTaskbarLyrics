@@ -30,8 +30,10 @@ Item {
         bridge.settings, hovered, bridge.connected ? bridge.tr("未在播放", "Not playing") : bridge.statusText(),
         bridge.tr("未知艺术家", "Unknown artist"))
     readonly property bool controlsAvailable: bridge.connected && !!bridge.track &&
-        (bridge.playing || bridge.playback.state === "paused")
+        (bridge.playing || (bridge.playbackState || bridge.playback.state) === "paused")
     readonly property bool showControls: hovered && !collapsed && controlsAvailable
+    readonly property bool bodyRequestPending: typeof bridge.actionPending === "function" &&
+        (bridge.actionPending("open") || bridge.actionPending("startLiked"))
     property bool ready: false
     property real controlsProgress: showControls ? 1 : 0
     Behavior on controlsProgress {
@@ -89,9 +91,23 @@ Item {
     onHeightChanged: Qt.callLater(function() { root.resize(true); controlsMotion.complete(); })
     Connections {
         target: bridge
-        function onPlaybackChanged() { root.reconcileVolume(); }
+        function onPlaybackChanged() {
+            if (bridge.instantFeedback === false && volumeFeedback.running && bridge.connected &&
+                    bridge.playback.volume !== root.lastActualFeedbackVolume) {
+                root.lastActualFeedbackVolume = bridge.playback.volume;
+                bridge.command("volumeOsd");
+            }
+            root.reconcileVolume();
+        }
         function onConnectedChanged() {
             if (!bridge.connected) { volumeFeedback.stop(); root.predictedVolume = -1; }
+        }
+        function onCommandFinished(requestId, action, success) {
+            if (success && bridge.instantFeedback === false && action === "setVolume" && requestId === root.volumeRequestId)
+                bridge.command("volumeOsd");
+            if (!success && action === "setVolume" && requestId === root.volumeRequestId) {
+                volumeFeedback.stop(); root.predictedVolume = -1;
+            }
         }
         function onMotionDurationChanged() {
             if (bridge.motionDuration === 0) { root.resize(true); controlsMotion.complete(); }
@@ -107,6 +123,8 @@ Item {
         else if (bridge.settings.clickAction === "popup") popupRequested();
     }
     property real predictedVolume: -1
+    property int volumeRequestId: -1
+    property real lastActualFeedbackVolume: -1
     function reconcileVolume() {
         // Old snapshots must not pull the OSD backwards during a scroll burst
         // or while an absolute volume command is still awaiting SP's ack.
@@ -128,12 +146,13 @@ Item {
             if (bridge.connected) {
                 var delta = event.angleDelta.y || event.angleDelta.x || event.pixelDelta.y || event.pixelDelta.x;
                 if (delta) {
+                    root.lastActualFeedbackVolume = bridge.playback.volume;
                     var base = root.predictedVolume >= 0 ? root.predictedVolume :
                         bridge.pendingVolume !== null ? bridge.pendingVolume : bridge.playback.volume;
                     root.predictedVolume = Math.max(0, Math.min(1, base + (delta > 0 ? 0.05 : -0.05)));
                     volumeFeedback.restart();
                     // Send once per wheel event; OSD and playback use one target.
-                    bridge.command("setVolume", root.predictedVolume, true);
+                    root.volumeRequestId = bridge.command("setVolume", root.predictedVolume, bridge.instantFeedback !== false);
                 }
             }
             event.accepted = true;
@@ -160,6 +179,13 @@ Item {
             Layout.preferredWidth: root.coverSize
             Layout.preferredHeight: root.coverSize
             Layout.alignment: Qt.AlignVCenter
+            QQC.BusyIndicator {
+                anchors.centerIn: parent
+                width: Math.min(parent.width, parent.height) * 0.55
+                height: width
+                running: root.bodyRequestPending
+                visible: running
+            }
             MouseArea { anchors.fill: parent; onClicked: root.bodyClick() }
         }
         Item {

@@ -108,6 +108,7 @@ Window {{
         function tr(zh, en) {{ return zh; }}
         function statusText() {{ return "SPlayer Next"; }}
         function command(action, value) {{}}
+        signal commandFinished(int requestId, string action, bool success)
         function requestQueue(offset) {{}}
     }}
     RowLayout {{

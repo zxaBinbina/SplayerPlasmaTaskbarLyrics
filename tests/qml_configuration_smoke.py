@@ -64,6 +64,11 @@ def visualFind(item,name):
         if found:return found
 themeEditor=visualFind(settings,"setting_themeMode")
 manualEditor=visualFind(settings,"setting_manualDark")
+instantEditor=visualFind(settings,"setting_instantFeedback")
+assert instantEditor and instantEditor.property("checked"),"instant feedback must be enabled by default"
+expr(settings,"edit('instantFeedback', false)")
+assert not instantEditor.property("checked")
+assert json.loads(settings.property("cfg_settingsRequest"))["changes"]["instantFeedback"] is False
 assert themeEditor and manualEditor
 themeBottom=themeEditor.mapToScene(QPointF(0,themeEditor.property("height"))).y()
 warningTop=warning.mapToScene(QPointF(0,0)).y()

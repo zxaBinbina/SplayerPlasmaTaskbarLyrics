@@ -10,6 +10,21 @@ from sptl.environment import Environment
 
 
 class ActivationTests(unittest.TestCase):
+    def test_explicit_favorite_waits_for_the_requested_tray_state(self):
+        environment = Environment()
+        with patch.object(environment.tray, "inspect", side_effect=[
+            {"available": True, "liked": False}, {"available": True, "liked": False}, {"available": True, "liked": True}
+        ]), patch.object(environment.tray, "toggle") as toggle:
+            environment.set_favorite(True)
+        toggle.assert_called_once()
+        self.assertTrue(environment.favorite["liked"])
+        with patch.object(environment.tray, "inspect", return_value={"available": True, "liked": True}), \
+                patch.object(environment.tray, "toggle") as toggle:
+            environment.set_favorite(True)
+        toggle.assert_not_called()
+        with patch.object(environment.tray, "inspect", return_value={"available": False, "liked": False}):
+            with self.assertRaises(ValueError): environment.set_favorite(True)
+
     def test_native_volume_uses_mpris_player_volume_property(self):
         environment = Environment()
         environment.bus_name = "org.mpris.MediaPlayer2.splayer_next.instance1"

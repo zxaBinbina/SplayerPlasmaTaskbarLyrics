@@ -130,6 +130,7 @@ class State:
                          "offset": 0, "volume": 1, "index": -1, "timestamp": 0,
                          "repeat": "list", "shuffle": "off"}
         self.commands = []
+        self.command_results = []
         self.next_command = 0
 
     @property
@@ -177,11 +178,18 @@ class State:
         ack = data.get("ack", [])
         if not isinstance(ack, list) or len(ack) > 1024:
             raise ValueError("invalid acknowledgements")
+        results = data.get("results", [])
+        if not isinstance(results, list) or len(results) > 1024 or any(
+            not isinstance(result, dict) or type(result.get("id")) is not int or
+            type(result.get("ok")) is not bool for result in results
+        ):
+            raise ValueError("invalid command results")
         previous = copy.deepcopy(self.content())
         new_session = data["session"] != self.session
         previous_track = self.track
         if new_session:
             self.commands.clear()
+            self.command_results.clear()
             self.lines = []
             self.lyric_revision = -1
             self.queue = empty_queue()
@@ -208,6 +216,15 @@ class State:
         self.playback = playback
         self.locale = str(data.get("locale", "zh-CN"))[:32]
         now = self.clock()
+        supplied = {result["id"]: result for result in results}
+        for command in self.commands:
+            if command["id"] in ack:
+                result = supplied.get(command["id"])
+                self.complete_command(command["id"], result["ok"] if result else not self.command_error,
+                                      result.get("error", "") if result else self.command_error)
+        for result in results:
+            if 0 < result["id"] <= self.next_command:
+                self.complete_command(result["id"], result["ok"], result.get("error", ""))
         self.commands = [c for c in self.commands if c["id"] not in ack and now - c["created"] < 3]
         if self.pending_start is not None:
             requested_at = self.pending_start
@@ -222,6 +239,13 @@ class State:
         return {"protocol": 1, "locale": self.locale, "needLines": self.lyric_revision != revision,
                 "commands": [{k: v for k, v in c.items() if k != "created"} for c in self.commands]}
 
+    def complete_command(self, command_id, ok, error=""):
+        if any(result["id"] == command_id for result in self.command_results):
+            return
+        errors = ("control_failed", "queue_changed", "queue_unavailable", "login_required", "liked_empty", "start_unavailable", "fm_changed")
+        self.command_results.append({"id": command_id, "ok": ok, "error": error if error in errors else "control_failed" if not ok else ""})
+        self.command_results = self.command_results[-128:]
+
     def command(self, action, value=None):
         if action not in ("prev", "next", "toggle", "seek", "volume", "setVolume", "mode", "queue", "queuePlay", "startLiked", "dislike"):
             raise ValueError("unknown command")
@@ -229,6 +253,8 @@ class State:
             raise ValueError("plugin disconnected")
         if action == "startLiked" and not self.start_available:
             raise ValueError("liked playback is unavailable; update the SP plugin")
+        if action == "toggle" and value not in (None, "playing", "paused"):
+            raise ValueError("invalid playback state")
         if action in ("seek", "volume", "setVolume"):
             if finite(value, None) is None:
                 raise ValueError("invalid command value")

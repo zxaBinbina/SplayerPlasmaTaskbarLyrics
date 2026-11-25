@@ -180,6 +180,18 @@ QQC.ScrollView {
                 Kirigami.FormData.isSection: true
             }
             Repeater {
+                model: root.settingsFor(["instantFeedback"])
+                delegate: settingDelegate
+            }
+            QQC.Label {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                color: Kirigami.Theme.disabledTextColor
+                wrapMode: Text.Wrap
+                text: configBridge.tr("点击后立即更新按钮和音量提示，操作失败时恢复。关闭后跟随播放器的实际状态。",
+                    "Update buttons and volume feedback immediately, restoring them if an action fails. Turn off to follow the player's actual state.")
+            }
+            Repeater {
                 model: root.settingsFor(["clickAction", "idleClick", "clickLyricSeek", "hoverFavoriteEnabled", "offlineDisplay", "offlineClick"])
                 delegate: settingDelegate
             }

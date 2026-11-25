@@ -28,6 +28,7 @@ ColumnLayout {
         QQC.Button {
             objectName: "refreshQueue"
             text: bridge.tr("刷新", "Refresh")
+            highlighted: typeof bridge.actionPending === "function" && bridge.actionPending("queue") && bridge.feedbackValue("queue", -1) === bridge.queue.offset
             enabled: bridge.connected && !bridge.queueLoading
             onClicked: bridge.requestQueue(bridge.queue.offset)
         }
@@ -50,7 +51,7 @@ ColumnLayout {
             width: list.width
             height: 56
             enabled: bridge.connected && bridge.queue.available
-            highlighted: queueIndex === bridge.queue.currentIndex
+            highlighted: queueIndex === (bridge.queueSelectionIndex === undefined ? bridge.queue.currentIndex : bridge.queueSelectionIndex)
             onClicked: bridge.command("queuePlay", {index: queueIndex, id: track.id, source: track.source, path: track.path || ""})
             contentItem: RowLayout {
                 spacing: 10
@@ -108,6 +109,7 @@ ColumnLayout {
         QQC.Button {
             objectName: "previousQueuePage"
             text: bridge.tr("上一页", "Previous")
+            highlighted: typeof bridge.actionPending === "function" && bridge.actionPending("queue") && bridge.feedbackValue("queue", -1) < bridge.queue.offset
             enabled: bridge.connected && !bridge.queueLoading && bridge.queue.offset > 0
             onClicked: bridge.requestQueue(Math.max(0, bridge.queue.offset - 50))
         }
@@ -120,6 +122,7 @@ ColumnLayout {
         QQC.Button {
             objectName: "nextQueuePage"
             text: bridge.tr("下一页", "Next")
+            highlighted: typeof bridge.actionPending === "function" && bridge.actionPending("queue") && bridge.feedbackValue("queue", -1) > bridge.queue.offset
             enabled: bridge.connected && !bridge.queueLoading && bridge.queue.offset + bridge.queue.tracks.length < bridge.queue.total
             onClicked: bridge.requestQueue(bridge.queue.offset + 50)
         }

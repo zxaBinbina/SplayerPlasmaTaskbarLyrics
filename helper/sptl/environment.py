@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -154,6 +155,22 @@ class Environment:
 
     def toggle_favorite(self):
         self.tray.toggle()
+
+    def set_favorite(self, liked):
+        item = self.tray.inspect()
+        if not item["available"]:
+            raise ValueError("SP favorite menu is unavailable")
+        if item["liked"] != liked:
+            self.tray.toggle()
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                item = self.tray.inspect()
+                if item["available"] and item["liked"] == liked:
+                    break
+                time.sleep(.04)
+            if not item["available"] or item["liked"] != liked:
+                raise OSError("SP favorite change was not confirmed")
+        self.favorite = {key: item[key] for key in ("available", "liked")}
 
     def set_volume(self, volume):
         """Set SP's player volume through its native MPRIS interface when available."""

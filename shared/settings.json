@@ -145,6 +145,12 @@
     "default": true
   },
   {
+    "key": "instantFeedback",
+    "type": "switch",
+    "label": "即时操作反馈 / Instant action feedback",
+    "default": true
+  },
+  {
     "key": "clickAction",
     "type": "select",
     "label": "点击主体 / Body click",

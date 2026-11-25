@@ -37,6 +37,8 @@ class BridgeServer(ThreadingHTTPServer):
         self.volume_osd_lock = threading.Lock()
         self.volume_sequences = {}
         self.pending_native_volumes = {}
+        self.favorite_lock = threading.Lock()
+        self.input_sequences = {}
         self.token = secrets.token_urlsafe(32)
         self.monitor_stop = threading.Event()
         self.monitor = None
@@ -92,6 +94,20 @@ class BridgeServer(ThreadingHTTPServer):
         temporary.write_text(json.dumps(self.state.settings if settings is None else settings, ensure_ascii=False))
         temporary.chmod(0o600)
         temporary.replace(path)
+
+    def accept_input(self, data, slot):
+        client, sequence = data.get("inputClient"), data.get("inputSequence")
+        if client is None and sequence is None:
+            return True
+        if not isinstance(client, str) or not 1 <= len(client) <= 128 or type(sequence) is not int or sequence < 1:
+            raise ValueError("invalid input sequence")
+        key = client, slot
+        if sequence <= self.input_sequences.get(key, 0):
+            return False
+        if key not in self.input_sequences and len(self.input_sequences) >= 512:
+            self.input_sequences.pop(next(iter(self.input_sequences)))
+        self.input_sequences[key] = sequence
+        return True
 
     def update_settings(self, changes):
         if not isinstance(changes, dict) or any(key not in DEFAULTS for key in changes):
@@ -154,6 +170,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = {"protocol": 1, "revision": state.content_revision,
                           "token": self.server.token, "playback": state.playback,
                           "pendingVolume": pending_volume["value"] if state.connected and pending_volume else None,
+                          "commandResults": state.command_results,
                           "serverTime": int(time.time() * 1000)}
                 if query.get("revision", ["-1"])[0] != revision:
                     result["content"] = state.content()
@@ -238,8 +255,30 @@ class Handler(BaseHTTPRequestHandler):
                             value.get(key, "") != state.track[key] for key in ("id", "source", "path")
                         ):
                             raise ValueError("favorite track is stale")
+                        favorite_liked = data.get("favoriteLiked")
+                        if favorite_liked is not None and type(favorite_liked) is not bool:
+                            raise ValueError("invalid favorite state")
+                        if not self.server.accept_input(data, "favorite"):
+                            return self.respond(200, {"superseded": True})
                     else:
                         command_id = self.server.state.command(action, data.get("value"))
+                        if action == "seek" and data.get("targetTrack") is not None:
+                            selected = data["targetTrack"]
+                            if not isinstance(selected, dict) or not self.server.state.track or any(
+                                selected.get(key, "") != self.server.state.track[key] for key in ("id", "source", "path")
+                            ):
+                                self.server.state.commands.pop()
+                                raise ValueError("seek track is stale")
+                            self.server.state.commands[-1]["targetTrack"] = {key: selected.get(key, "") for key in ("id", "source", "path")}
+                        if action in ("toggle", "seek", "mode", "queuePlay"):
+                            try:
+                                accepted = self.server.accept_input(data, action)
+                            except ValueError:
+                                self.server.state.commands.pop()
+                                raise
+                            if not accepted:
+                                self.server.state.commands.pop()
+                                return self.respond(200, {"superseded": True})
                         return self.respond(200, {"id": command_id})
             if parsed.path == "/command" and action in ("launch", "open", "startLiked"):
                 # A startup request survives the first plugin session handshake.
@@ -253,7 +292,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {"ok": True})
             if parsed.path == "/command" and action == "favorite":
                 # D-Bus must not block playback snapshots behind the state lock.
-                self.server.environment.toggle_favorite()
+                with self.server.favorite_lock:
+                    with self.server.lock:
+                        if not self.server.state.connected or not self.server.state.track or any(
+                            value.get(key, "") != self.server.state.track[key] for key in ("id", "source", "path")
+                        ):
+                            raise ValueError("favorite track is stale")
+                        if data.get("inputClient") is not None and data["inputSequence"] != self.server.input_sequences.get((data["inputClient"], "favorite")):
+                            return self.respond(200, {"superseded": True})
+                    setter = getattr(self.server.environment, "set_favorite", None)
+                    if favorite_liked is not None and setter:
+                        setter(favorite_liked)
+                    else:
+                        self.server.environment.toggle_favorite()
+                    with self.server.lock:
+                        self.server.state.favorite = dict(self.server.environment.favorite)
+                        self.server.state.content_revision += 1
                 return self.respond(200, {"ok": True})
             if parsed.path == "/command" and action == "volumeOsd":
                 # The percentage comes from SP's snapshot, never the caller.

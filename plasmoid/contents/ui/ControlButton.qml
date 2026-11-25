@@ -8,9 +8,11 @@ QQC.ToolButton {
     property real sizeScale: 1
     property string iconName: ""
     property string commandAction: ""
+    property string feedbackAction: commandAction
     property var commandValue
     property bool toolTipEnabled: true
-    readonly property color glyphColor: checked ? bridge.accent : bridge.foreground
+    readonly property bool requestPending: feedbackAction !== "" && typeof bridge.actionPending === "function" && bridge.actionPending(feedbackAction)
+    readonly property color glyphColor: checked || requestPending ? bridge.accent : bridge.foreground
     implicitWidth: 28 * sizeScale
     implicitHeight: 28 * sizeScale
     hoverEnabled: true
@@ -101,7 +103,7 @@ QQC.ToolButton {
     }
     background: Rectangle {
         radius: 5
-        color: root.down ? Qt.rgba(root.bridge.accent.r, root.bridge.accent.g, root.bridge.accent.b, 0.3) :
+        color: root.down || root.requestPending ? Qt.rgba(root.bridge.accent.r, root.bridge.accent.g, root.bridge.accent.b, 0.3) :
             root.hovered ? Qt.rgba(root.bridge.foreground.r, root.bridge.foreground.g, root.bridge.foreground.b, 0.12) : "transparent"
         Behavior on color { ColorAnimation { id: hoverMotion; duration: root.bridge.quickDuration } }
     }

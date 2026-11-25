@@ -209,6 +209,54 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(values[-1], .7, "the popup slider must also use native volume")
         self.assertEqual(self.env.volume_osds, [55, 60, 65], "the popup slider does not request an OSD")
 
+    def test_button_input_sequence_rejects_old_state_without_blocking_other_controls(self):
+        self.request("POST", "/exchange", snapshot(modeAvailable=True))
+        body = {"token": self.server.token, "inputClient": "buttons"}
+        for action, value, sequence in (("toggle", "paused", 2), ("mode", "one", 3), ("toggle", "playing", 1)):
+            status, response = self.request("POST", "/command", dict(body, action=action, value=value, inputSequence=sequence))
+            self.assertEqual(status, 200)
+            if sequence == 1: self.assertTrue(response["superseded"])
+        self.assertEqual([(c["action"], c["value"]) for c in self.server.state.commands], [("toggle", "paused"), ("mode", "one")])
+        commands = list(self.server.state.commands)
+        self.request("POST", "/exchange", snapshot(modeAvailable=True, ack=[c["id"] for c in commands],
+            results=[{"id": commands[0]["id"], "ok": True}, {"id": commands[1]["id"], "ok": False, "error": "control_failed"}]))
+        outcomes = self.request("GET", "/state")[1]["commandResults"]
+        self.assertTrue(outcomes[0]["ok"])
+        self.assertFalse(outcomes[1]["ok"])
+        status, _ = self.request("POST", "/command", {"token": self.server.token, "action": "seek", "value": 4000,
+            "targetTrack": {"id": "old", "source": "", "path": ""}})
+        self.assertEqual(status, 400)
+        self.assertEqual(self.server.state.commands, [])
+        selected = {key: self.server.state.track[key] for key in ("id", "source", "path")}
+        self.assertEqual(self.request("POST", "/command", {"token": self.server.token, "action": "seek", "value": 4000,
+            "targetTrack": selected})[0], 200)
+        self.assertEqual(self.server.state.commands[-1]["targetTrack"], selected)
+
+    def test_explicit_favorite_requests_keep_latest_state_and_do_not_block_playback(self):
+        self.request("POST", "/exchange", snapshot())
+        selected = {key: self.server.state.track[key] for key in ("id", "source", "path")}
+        started, release = threading.Event(), threading.Event()
+        values = []
+        def delayed(liked):
+            values.append(liked)
+            if liked:
+                started.set(); release.wait(2)
+            self.env.favorite = {"available": True, "liked": liked}
+        self.env.set_favorite = delayed
+        body = {"token": self.server.token, "action": "favorite", "value": selected, "inputClient": "favorite"}
+        worker = threading.Thread(target=lambda: self.request("POST", "/command", dict(body, favoriteLiked=True, inputSequence=1)))
+        worker.start()
+        try:
+            self.assertTrue(started.wait(1))
+            self.assertEqual(self.request("POST", "/command", {"token": self.server.token, "action": "toggle", "value": "paused"})[0], 200)
+            self.assertEqual(self.request("GET", "/state")[0], 200)
+        finally:
+            release.set(); worker.join()
+        self.assertEqual(self.request("POST", "/command", dict(body, favoriteLiked=False, inputSequence=2))[0], 200)
+        self.assertTrue(self.request("POST", "/command", dict(body, favoriteLiked=True, inputSequence=1))[1]["superseded"])
+        self.assertEqual(values, [True, False])
+        self.assertFalse(self.server.state.favorite["liked"])
+
     def test_slow_native_volume_preserves_latest_prediction_and_never_blocks_playback(self):
         self.request("POST", "/exchange", snapshot())
         started, release = threading.Event(), threading.Event()
