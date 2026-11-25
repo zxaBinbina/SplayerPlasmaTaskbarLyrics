@@ -281,7 +281,7 @@ Window {{
         playlist_button = popup.findChild(QObject, "playlistButton")
         click(playlist_button)
         assert popup.property("playlistShown")
-        assert not popup.findChild(QObject, "fullLyricsList").isVisible()
+        until(lambda: not popup.findChild(QObject, "fullLyricsList").isVisible())
         request = command("queue", -1)
         page(request, 0)
         queue_list = popup.findChild(QObject, "playbackQueueList")
@@ -308,6 +308,7 @@ Window {{
         click(playlist_button)
         assert not popup.property("playlistShown")
         assert popup.findChild(QObject, "fullLyricsList").isVisible()
+        until(lambda: not popup.findChild(QObject, "playbackQueue").isVisible())
         popup.setProperty("width", 320)
         pump(100)
         for name in ("playbackModeButton", "popupControls", "popupFavoriteButton", "playlistButton", "openSPlayerButton", "volumeSlider"):

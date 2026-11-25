@@ -341,7 +341,7 @@ Window {{
         pump()
         assert bridge.property("currentIndex") == 1
         popup = window.findChild(QObject, "popup")
-        lyric_delegate = expression(popup, "children[0].children[1].itemAtIndex(bridge.currentIndex)")
+        lyric_delegate = expression(popup.findChild(QObject, "fullLyricsList"), f"itemAtIndex({bridge.property('currentIndex')})")
         if hasattr(lyric_delegate, "toQObject"):
             lyric_delegate = lyric_delegate.toQObject()
         point = lyric_delegate.mapToScene(QPointF(30, 20))

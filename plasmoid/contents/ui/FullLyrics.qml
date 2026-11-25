@@ -9,6 +9,13 @@ Rectangle {
     property var bridge
     property bool following: true
     property bool playlistShown: false
+    property real playlistProgress: 0
+    readonly property real pageSlide: Math.min(18, Math.max(0, width * 0.04))
+    NumberAnimation {
+        id: playlistMotion
+        target: root; property: "playlistProgress"
+        duration: bridge.motionDuration; easing.type: Easing.OutCubic
+    }
     property real pendingVolume: -1
     property int volumeRequestId: -1
     property int playlistRequestId: -1
@@ -21,6 +28,21 @@ Rectangle {
     Layout.preferredHeight: 560
     color: bridge.background
     radius: 10
+    function finishPlaylistTransition() {
+        playlistMotion.stop();
+        playlistProgress = playlistShown ? 1 : 0;
+    }
+    function switchPlaylistPage() {
+        var previous = playlistProgress, destination = playlistShown ? 1 : 0;
+        playlistMotion.stop();
+        if (!visible || bridge.motionDuration === 0 || Math.abs(destination - previous) < 0.000001) {
+            playlistProgress = destination;
+            return;
+        }
+        playlistMotion.from = previous;
+        playlistMotion.to = destination;
+        playlistMotion.start();
+    }
     function follow(immediate) {
         if (!visible || playlistShown || !following || bridge.currentIndex < 0 || !lyrics.count) return;
         scrollMotion.stop();
@@ -45,7 +67,9 @@ Rectangle {
             scrollMotion.stop();
             Qt.callLater(function() { root.follow(true); });
         }
-        function onMotionDurationChanged() { if (bridge.motionDuration === 0) scrollMotion.complete(); }
+        function onMotionDurationChanged() {
+            if (bridge.motionDuration === 0) { scrollMotion.complete(); root.finishPlaylistTransition(); }
+        }
         function onFmActiveChanged() { if (bridge.fmActive) modeMenu.close(); }
         function onCommandFinished(requestId, action, success) {
             if (!success && bridge.instantFeedback !== false && action === "queue" && requestId === root.playlistRequestId) root.playlistShown = false;
@@ -56,9 +80,10 @@ Rectangle {
     }
     onVisibleChanged: {
         if (visible) { following = true; Qt.callLater(function() { root.follow(true); }); }
-        else { scrollMotion.stop(); resume.stop(); playlistShown = false; }
+        else { scrollMotion.stop(); resume.stop(); playlistShown = false; root.finishPlaylistTransition(); }
     }
     onPlaylistShownChanged: {
+        root.switchPlaylistPage();
         if (playlistShown) { scrollMotion.stop(); playlistRequestId = bridge.requestQueue(); }
         else Qt.callLater(function() { root.follow(true); });
     }
@@ -122,83 +147,93 @@ Rectangle {
                 onClicked: bridge.command("open")
             }
         }
-        ListView {
-            id: lyrics
-            objectName: "fullLyricsList"
-            visible: !root.playlistShown
+        Item {
+            objectName: "popupContentPane"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            spacing: 10
-            model: bridge.lines
-            boundsBehavior: Flickable.StopAtBounds
-            QQC.ScrollBar.vertical: QQC.ScrollBar {}
-            onMovementStarted: { root.following = false; scrollMotion.stop(); resume.stop(); }
-            onMovementEnded: { if (!root.following) resume.restart(); }
-            onModelChanged: Qt.callLater(function() { root.follow(true); })
-            delegate: Rectangle {
-                id: lineDelegate
-                property var line: modelData
-                property bool active: index === bridge.currentIndex
-                width: lyrics.width
-                height: lyricColumn.implicitHeight + 20
-                color: active ? Qt.rgba(bridge.accent.r, bridge.accent.g, bridge.accent.b, 0.12) : "transparent"
-                radius: 7
-                Behavior on color {
-                    ColorAnimation { duration: bridge.motionDuration }
-                }
-                Column {
-                    id: lyricColumn
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.margins: 10
-                    spacing: 4
-                    Marquee {
-                        width: parent.width
-                        text: lineDelegate.line.text
-                        pixelSize: 18
-                        textColor: bridge.foreground
-                        highlightColor: bridge.accent
-                        lineActive: lineDelegate.active
-                        words: lineDelegate.active && lineDelegate.line.wordTimed ? lineDelegate.line.words : []
-                        position: bridge.lyricPosition
+            ListView {
+                id: lyrics
+                objectName: "fullLyricsList"
+                anchors.fill: parent
+                visible: !root.playlistShown || root.playlistProgress < 1
+                enabled: !root.playlistShown && root.playlistProgress === 0
+                opacity: 1 - root.playlistProgress
+                transform: Translate { x: -root.pageSlide * root.playlistProgress }
+                clip: true
+                spacing: 10
+                model: bridge.lines
+                boundsBehavior: Flickable.StopAtBounds
+                QQC.ScrollBar.vertical: QQC.ScrollBar {}
+                onMovementStarted: { root.following = false; scrollMotion.stop(); resume.stop(); }
+                onMovementEnded: { if (!root.following) resume.restart(); }
+                onModelChanged: Qt.callLater(function() { root.follow(true); })
+                delegate: Rectangle {
+                    id: lineDelegate
+                    property var line: modelData
+                    property bool active: index === bridge.currentIndex
+                    width: lyrics.width
+                    height: lyricColumn.implicitHeight + 20
+                    color: active ? Qt.rgba(bridge.accent.r, bridge.accent.g, bridge.accent.b, 0.12) : "transparent"
+                    radius: 7
+                    Behavior on color {
+                        ColorAnimation { duration: bridge.motionDuration }
                     }
-                    Marquee {
-                        width: parent.width
-                        visible: text.length > 0
-                        text: Logic.auxiliary(lineDelegate.line, bridge.settings.auxiliary)
-                        pixelSize: 14
-                        textColor: bridge.secondary
-                        highlightColor: bridge.accent
-                        words: lineDelegate.active ? Logic.auxiliaryWords(lineDelegate.line, bridge.settings.auxiliary) : []
-                        position: bridge.lyricPosition
+                    Column {
+                        id: lyricColumn
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.margins: 10
+                        spacing: 4
+                        Marquee {
+                            width: parent.width
+                            text: lineDelegate.line.text
+                            pixelSize: 18
+                            textColor: bridge.foreground
+                            highlightColor: bridge.accent
+                            lineActive: lineDelegate.active
+                            words: lineDelegate.active && lineDelegate.line.wordTimed ? lineDelegate.line.words : []
+                            position: bridge.lyricPosition
+                        }
+                        Marquee {
+                            width: parent.width
+                            visible: text.length > 0
+                            text: Logic.auxiliary(lineDelegate.line, bridge.settings.auxiliary)
+                            pixelSize: 14
+                            textColor: bridge.secondary
+                            highlightColor: bridge.accent
+                            words: lineDelegate.active ? Logic.auxiliaryWords(lineDelegate.line, bridge.settings.auxiliary) : []
+                            position: bridge.lyricPosition
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: bridge.connected && bridge.settings.clickLyricSeek && lineDelegate.line.timed
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: bridge.command("seek", Math.max(0, lineDelegate.line.startTime - bridge.playback.offset))
                     }
                 }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: bridge.connected && bridge.settings.clickLyricSeek && lineDelegate.line.timed
-                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                    onClicked: bridge.command("seek", Math.max(0, lineDelegate.line.startTime - bridge.playback.offset))
+                Text {
+                    anchors.centerIn: parent
+                    width: parent.width - 16
+                    visible: lyrics.count === 0
+                    text: bridge.track ? bridge.tr("暂无歌词", "No lyrics available") : bridge.statusText()
+                    color: bridge.secondary
+                    textFormat: Text.PlainText
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
                 }
             }
-            Text {
-                anchors.centerIn: parent
-                width: parent.width - 16
-                visible: lyrics.count === 0
-                text: bridge.track ? bridge.tr("暂无歌词", "No lyrics available") : bridge.statusText()
-                color: bridge.secondary
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
+            PlaybackQueue {
+                objectName: "playbackQueue"
+                bridge: root.bridge
+                anchors.fill: parent
+                visible: root.playlistShown || root.playlistProgress > 0
+                enabled: root.playlistShown && root.playlistProgress === 1
+                opacity: root.playlistProgress
+                transform: Translate { x: root.pageSlide * (1 - root.playlistProgress) }
             }
-        }
-        PlaybackQueue {
-            objectName: "playbackQueue"
-            bridge: root.bridge
-            visible: root.playlistShown
-            Layout.fillWidth: true
-            Layout.fillHeight: true
         }
         Text {
             Layout.fillWidth: true

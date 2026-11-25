@@ -89,6 +89,8 @@ KDE 的预定义许可证不包含 AGPL；构建时从项目 LICENSE 生成 Lice
 避免内容缩放反过来改变面板高度。多个面板仍共享基准字号，但按各自高度独立适配。
 
 界面动画默认开启，时长取 Kirigami 的 longDuration／shortDuration，跟随 KDE 动画速度；
+弹窗歌词与播放列表在固定内容视口内交叉淡入淡出并轻微横向滑动，底部控制区保持位置。
+快速切换从当前进度反向过渡，退出页面立即禁用交互；关闭弹窗或关闭动画会立即结束过渡。
 共享设置 animationsEnabled 可关闭。歌词切换立即更新文本与逐字时间，随后执行淡入和轻微上移，
 连续换行会重新开始当前过渡，不延迟播放状态。Taskbar 的 targetWidth 表示最终宽度，
 visualWidth 表示宽度动画进度，layoutWidth 表示对 Plasma 预留的空间。

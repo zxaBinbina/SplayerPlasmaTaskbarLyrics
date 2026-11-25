@@ -109,7 +109,7 @@ Window {{
         function statusText() {{ return "SPlayer Next"; }}
         function command(action, value) {{}}
         signal commandFinished(int requestId, string action, bool success)
-        function requestQueue(offset) {{}}
+        function requestQueue(offset) {{ return 0; }}
     }}
     RowLayout {{
         id: fitPanel; x: 20; y: 20; width: implicitWidth; height: 42
@@ -360,6 +360,53 @@ Window {{
         pump(120)
         assert expression(toggle, "contentItem.scale") < 1
         QTest.mouseRelease(window, Qt.LeftButton, pos=click)
+
+        # Both pages share one viewport; fades must not move the footer or
+        # leave the outgoing page interactive, including during reversals.
+        queue_page = popup.findChild(QObject, "playbackQueue")
+        pane = popup.findChild(QObject, "popupContentPane")
+        playlist_button = popup.findChild(QObject, "playlistButton")
+        footer_y = playlist_button.mapToScene(QPointF(0, 0)).y()
+        pane_height = pane.property("height")
+        expression(popup, "playlistShown = true")
+        pump(40)
+        middle = popup.property("playlistProgress")
+        assert 0 < middle < 1
+        assert lyrics.isVisible() and queue_page.isVisible()
+        assert not lyrics.isEnabled() and not queue_page.isEnabled(), "moving content must not accept clicks through the outgoing page"
+        assert abs(lyrics.property("opacity") + queue_page.property("opacity") - 1) < .001
+        assert pane.property("height") == pane_height
+        assert playlist_button.mapToScene(QPointF(0, 0)).y() == footer_y
+        expression(popup, "playlistShown = false")
+        assert abs(popup.property("playlistProgress") - middle) < .001, "reversing must resume from the current fade"
+        pump(40)
+        assert 0 < popup.property("playlistProgress") < middle
+        assert not lyrics.isEnabled() and not queue_page.isEnabled()
+        expression(popup, "playlistShown = true")
+        popup.setProperty("width", 320)
+        pump(40)
+        assert lyrics.property("width") == queue_page.property("width") == pane.property("width")
+        until(lambda: popup.property("playlistProgress") == 1)
+        assert not lyrics.isVisible() and queue_page.isVisible()
+        assert queue_page.isEnabled()
+        expression(popup, "playlistShown = false")
+        until(lambda: popup.property("playlistProgress") == 0)
+        assert lyrics.isVisible() and not queue_page.isVisible()
+        assert lyrics.isEnabled()
+        popup.setProperty("width", 480)
+        expression(popup, "playlistShown = true")
+        pump(40)
+        expression(bridge, 'settings = Object.assign({}, settings, {animationsEnabled: false})')
+        assert popup.property("playlistProgress") == 1, "disabling animations must finish the active page transition"
+        expression(popup, "playlistShown = false")
+        assert popup.property("playlistProgress") == 0
+        expression(bridge, 'settings = Object.assign({}, settings, {animationsEnabled: true})')
+        expression(popup, "playlistShown = true")
+        pump(40)
+        popup.setProperty("visible", False)
+        assert not popup.property("playlistShown") and popup.property("playlistProgress") == 0
+        popup.setProperty("visible", True)
+        pump(250)
 
         previous = lyrics.property("contentY")
         expression(bridge, "currentIndex = 20")
