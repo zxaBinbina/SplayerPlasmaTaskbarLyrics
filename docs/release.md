@@ -26,10 +26,11 @@ Plasma 5.27／Qt 5.15 或 Plasma 6／Qt 6。KDE Store 单独安装小组件不�
 升级时请同时更新 Python 辅助服务与 SPlayer 插件。
 
 ```sh
-python3 tools/install.py --reload-plasma
+python3 tools/install.py
 ```
 
-在 SPlayer 中导入生成的 `zxaBinbina.sptl.js`，允许 **network、control、api** 权限。
+安装命令只部署辅助程序。KDE 小组件通过面板的「获取新小部件」入口搜索 SPTL 安装；
+SPlayer 插件通过「全局设置 → 插件管理 → 插件市场」安装「SPTL 任务栏歌词」。
 网易云自动播放复用 SPlayer 已登录账号，不需要在 SPTL 输入凭据。
 详细说明见 [安装文档](install.md)。
 
@@ -40,7 +41,7 @@ python3 tools/install.py --reload-plasma
 | GitHub | [v1.2.1](https://github.com/zxaBinbina/SplayerPlasmaTaskbarLyrics/releases/tag/v1.2.1) | SP 插件、Plasma 5／6 包、辅助服务源码与 SHA256 校验文件 |
 | KDE Store／Plasma 6 | [2382272](https://store.kde.org/p/2382272/) | 1.2.1 Plasma 6 安装包 |
 | KDE Store／Plasma 5 | [2382273](https://store.kde.org/p/2382273/) | 1.2.1 Plasma 5.27+ 安装包 |
-| SP 插件市场 | [投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33)、[PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) | 插件投稿，维护者审核后收录 |
+| SP 插件市场 | [投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33)、[PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) | 已收录，在 SPlayer 插件市场中搜索安装 |
 
 后续仅小组件或辅助服务有改动时，不更新 SPlayer 投稿 issue；插件实现有改动时才同步投稿。
 

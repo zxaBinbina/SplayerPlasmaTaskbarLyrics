@@ -2,26 +2,29 @@
 
 ## 常规安装
 
-执行 `python3 tools/install.py`，无需 sudo。脚本构建插件和小部件，
-安装到 XDG 用户数据目录，并启用 `sptl-bridge.service` 用户服务。
-SP 插件需要通过官方插件管理页面导入，脚本不会修改 SP 的私有配置。
+执行 `python3 tools/install.py`，无需 sudo。脚本只安装或更新辅助程序、共享设置定义与许可证，
+并启用或重启 `sptl-bridge.service` 用户服务，不构建或安装小组件及 SPlayer 插件。
+首次运行直接安装；检测到已有辅助程序时，再次运行会提供「升级 / 卸载 / 取消」菜单。
+安装完成后提示“卸载请再次运行此脚本，并选择「卸载」”。无交互终端时使用 `--upgrade` 或 `--uninstall` 明确选择操作。
 
-1.0 需要 SPlayer 插件 API 5，并允许 `network`、`control`、`api` 权限。
-更新后重新导入生成的 `zxaBinbina.sptl.js`，接受新增的 API 权限。
+KDE 小组件获取方式：右键面板（任务栏）→「添加或管理小部件」→「获取新小部件」→「下载新 Plasma 小部件」。
+输入「SPTL」搜索，进入「SPTL 1.2.1 — SPlayer Taskbar Lyrics」条目，点击「安装」。
+SPlayer 插件获取方式：「全局设置」→「插件管理」→「插件市场」→「SPTL 任务栏歌词」→「安装」。
+需要 SPlayer 插件 API 5+；插件的权限及更新通过官方插件管理处理。
+
 右键小部件配置“封面形状”“播放时旋转圆形封面”和「显示“未在播放”时点击」。
 圆角方形可设 1–49% 的圆角程度，不可旋转。
 自动播放“我喜欢的音乐”需要在 SPlayer 中登录网易云音乐；不需要在 SPTL 中输入账号或凭据。
 空闲点击设置仅在没有当前歌曲、显示“未在播放”时生效；暂停时使用“点击主体”设置，默认打开歌词弹窗。
 
-版本检测优先读取 KDE_SESSION_VERSION，否则以 Qt 离屏模式运行 `plasmashell --version`，无需连接显示服务。
-从桌面外启动的终端会尝试当前用户的 `/run/user/<uid>/bus`；若没有可用用户会话，安装前会明确提示。
-可显式选择 `--plasma 5` 或 `--plasma 6`。两种安装包使用同一个小部件 ID；
-同一用户的数据目录保留一套安装，切换 Plasma 主版本时重新安装对应包。
+辅助程序安装只需要 Python 和可用的 systemd 用户会话，无需检测 Plasma 版本或提供 kpackagetool。
+从桌面外启动的终端会尝试当前用户的 `/run/user/<uid>/bus`；若没有可用用户会话，写入安装文件前会明确提示。
+旧 `--plasma` 与 `--reload-plasma` 参数仅兼容旧命令，不再安装小组件或重载面板。
 
 ## AppImage 或自定义数据目录
 
 ```sh
-python3 tools/install.py --plasma 6 \
+python3 tools/install.py \
   --splayer-command '/path/to/SPlayer-Next.AppImage' \
   --splayer-config '/path/to/SPlayer-Next/app-data/config/settings.json'
 ```
@@ -29,6 +32,37 @@ python3 tools/install.py --plasma 6 \
 服务配置中的这些参数用于程序定位，不属于第二套外观设置。
 标准安装会尝试 XDG_CONFIG_HOME 下的 SPlayer-Next、splayer-next、splayer_next
 以及 Flatpak 配置目录。SP 封面缓存位置跟随它的 `cache.dir`。
+
+## 源码测试版安装
+
+仓库根目录的 [install-from-source.sh](../install-from-source.sh) 可从任意当前目录调用，
+使用该脚本所在工作区的源码，不下载 GitHub 发行包。
+
+```sh
+./install-from-source.sh
+```
+
+菜单提供仅辅助程序、全部组件、卸载辅助程序及取消。
+全量安装前请完全退出 SPlayer，脚本会在写入文件前检查播放器进程及安装环境。
+全量选项构建当前源码，使用对应的 `kpackagetool` 安装或更新同 ID 的 KDE 小组件，
+将 SPlayer 测试插件登记到 `app-data/plugins/manifest.json` 并写入 `plugins/scripts/`。
+登记格式为已验证的 SPlayer 插件清单版本 1；其他插件、用户权限、启用状态和插件设置均保留。
+启动 SPlayer 后加载新脚本；若该插件原先被禁用，请在插件管理中启用。
+
+```sh
+./install-from-source.sh --all --plasma 6
+./install-from-source.sh --all --plasma 5
+./install-from-source.sh --helper-only
+./install-from-source.sh --uninstall
+./install-from-source.sh --help
+```
+
+未指定 `--plasma` 时根据桌面会话或 `plasmashell --version` 自动检测。
+自定义播放器路径使用 `--splayer-command`；自定义配置使用 `--splayer-config`，
+或通过 `--splayer-data` 指定包含 `config/` 与 `plugins/` 的 `app-data` 目录。
+更新保留辅助程序的共享设置及已保存的播放器路径。
+只有显式使用 `--reload-plasma` 才会在全量安装后重载面板；通常可在更新小组件后注销再登录以清除缓存。
+源码脚本的卸载选项只删除辅助程序，测试小组件和插件分别通过各自管理界面移除。
 
 ## 手动构建与启动
 
@@ -40,7 +74,7 @@ kpackagetool6 --type Plasma/Applet --install dist/plasma6/org.kde.plasma.sptl
 
 Plasma 5 使用 `kpackagetool5` 和 `dist/plasma5/org.kde.plasma.sptl`。
 也可以在「安装本地小部件」中选择生成的 `.plasmoid`。
-只从 KDE Store 安装小部件时，仍需另外安装辅助程序并导入 SP 插件。
+从 KDE Store 安装小部件后，仍需运行辅助程序安装命令，并从 SPlayer 插件市场安装插件。
 
 ## 检查连接
 
@@ -75,31 +109,23 @@ AppImage 没有桌面入口时请提供 `--splayer-command`。
 多个不同高度的面板共用同一基准字号，并按各自可用高度适配。
 
 从旧版本更新时保留辅助程序已保存的配置。已导入的旧 SP 插件暂时可以继续使用，
-它的设置不会再覆盖 Plasma 设置；重新导入新插件后，SP 内不再提供外观设置表单。
+它的设置不会再覆盖 Plasma 设置；更新市场插件后，SP 内不再提供外观设置表单。
 
 ## 更新和卸载
 
-更新：重新运行安装命令，并在 SP 中重新导入生成的同 ID 插件。
-播放模式和播放列表需要本次新版 SPTL 插件；读取播放列表还要求 SP 支持插件 API 5。
-收藏通过 SP 的 Linux 托盘菜单执行，需要 `gdbus` 和可用的 SP 托盘入口，
-不需要增加插件权限；收藏高亮跟随 SP 的真实状态，不支持的歌曲沿用 SP 的提示。
-Plasma 在进程内缓存 QML 组件，移除后重新添加也可能继续运行旧代码。
-例如旧组件仍按任务栏高度把 32 像素压至约 8 像素，而磁盘代码和设置已经更新。
-使用以下命令更新并丢弃旧组件缓存：
-
-```sh
-python3 tools/install.py --reload-plasma
-```
-
-此选项重启正在运行的 `plasma-plasmashell.service`，面板和桌面短暂重载，
-应用窗口保留。仅支持该用户服务正在运行的桌面；否则安装前会明确停止，
-可选择普通更新后注销再登录。默认安装不会重启 Plasma。
+更新辅助程序：重新运行安装命令并选择「升级」，或使用 `python3 tools/install.py --upgrade` 跳过菜单。
+升级保留共享设置、自定义启动命令和播放器配置路径。
+小组件通过 KDE 商店更新，SPlayer 插件通过官方插件管理更新。
+播放模式和播放列表需要对应版本的 SPTL 插件，读取播放列表要求 SP 支持插件 API 5。
+收藏通过 SP 的 Linux 托盘菜单执行，需要 `gdbus` 和可用的 SP 托盘入口。
+辅助程序更新不会重启 Plasma 面板。小组件更新后若仍显示旧代码，注销后重新登录以清除缓存。
 卸载：
 
 ```sh
 python3 tools/install.py --uninstall
 ```
 
-在 SP 插件管理中删除插件。卸载默认保留 `XDG_STATE_HOME/sptl/settings.json`
+此命令只卸载辅助程序，不删除商店小组件或已有插件文件。小组件及 SPlayer 插件分别通过各自管理界面卸载。
+辅助程序卸载默认保留 `XDG_STATE_HOME/sptl/settings.json`
 （默认 `~/.local/state/sptl/settings.json`），加 `--purge` 删除保存的设置。
 脚本仅删除 SPTL 自己的文件，不改动 SP 安装或歌曲数据。

@@ -44,22 +44,43 @@ SPlayer 关闭时会先启动，再在插件连接后开始播放；“SP 关闭
 python3 tools/install.py
 ```
 
-然后：
+小组件和 SPlayer 插件通过各自商店安装，脚本仅安装或更新辅助程序：
 
-1. 在 SP 的「设置 → 插件管理 → 本地导入」中导入
-   `~/.local/share/sptl/zxaBinbina.sptl.js`（遵循 `XDG_DATA_HOME`）。
-2. 启用插件并允许 **network、control、api** 权限。
-3. 在顶部或底部横向任务栏添加「SPTL — SPlayer 任务栏歌词」。
+1. 右键面板（任务栏），点击「添加或管理小部件」→「获取新小部件」→「下载新 Plasma 小部件」。
+   搜索「SPTL」，打开「SPTL 1.2.1 — SPlayer Taskbar Lyrics」条目，点击「安装」。
+2. 打开 SPlayer 的「全局设置」→「插件管理」→「插件市场」，找到「SPTL 任务栏歌词」，点击「安装」。
+3. 将安装好的「SPTL — SPlayer 任务栏歌词」添加到顶部或底部横向任务栏。
 4. **右键 SPTL 小部件 → 配置**，修改后点击“应用”；多个小部件共用同一配置。
 
 组件随任务栏高度自动缩放封面、两行文字和悬停按钮，并保持垂直居中。
 字号设置为组件高 42 像素时的基准值；面板变矮时自动缩小文字，避免截断。
 
-安装脚本支持更新，更新后重新导入插件。Plasma 可能缓存旧小部件代码，
-移除后重新添加也可能继续使用旧版本。更新现有小部件时可运行
-`python3 tools/install.py --reload-plasma`，面板会短暂重载，应用窗口保留；
-也可以更新后注销再登录。
+首次运行直接安装辅助程序；之后再次运行，会询问升级或卸载。安装完成后提示“卸载请再次运行”。
+升级或卸载均保留共享设置和商店安装的组件，升级还会保留自定义播放器路径。
+小组件通过 KDE 商店更新，SPlayer 插件通过插件管理更新。更新辅助程序不会重载面板；
+若小组件更新后仍使用旧缓存，注销后重新登录。
 详情及 AppImage、自定义路径、卸载方法见 [安装说明](docs/install.md)。
+
+## 源码测试版安装
+
+在源码仓库运行：
+
+```sh
+./install-from-source.sh
+```
+
+脚本提供“仅辅助程序”和“全部组件”选项，也可选择卸载辅助程序。
+全量选项从当前工作区构建并安装 KDE 小组件、SPlayer 插件及辅助程序，适合测试尚未发布的修改。
+安装全量测试版前需完全退出 SPlayer；安装后启动播放器即可加载测试插件，已有启用状态、权限和设置保留。
+
+```sh
+./install-from-source.sh --all --plasma 6
+./install-from-source.sh --helper-only
+./install-from-source.sh --uninstall
+```
+
+Plasma 5 使用 `--plasma 5`；省略时自动检测。自定义 SPlayer 数据目录使用 `--splayer-data`，
+例如 `--splayer-data '/path/to/SPlayer-Next/app-data'`。更多选项见 [安装说明](docs/install.md)。
 
 ## 构建和验证
 
@@ -74,6 +95,7 @@ python3 tests/qml_configuration_smoke.py
 python3 tests/qml_feedback_smoke.py
 python3 tests/package_smoke.py
 python3 tests/install_smoke.py
+python3 tests/source_install_smoke.py
 # 在 KDE Wayland 会话验证真实的圆形裁切（需要图形后端）
 python3 tests/qml_cover_render.py --desktop
 ```
@@ -92,10 +114,9 @@ QML 验证需要 PySide6 和 Plasma/Kirigami QML 模块，仅为开发检查依�
 提供 SP 插件、Plasma 5/6 安装包、完整源码及 SHA-256 校验值。
 插件信息和安装包使用项目所有者提供的图标；任务栏未播放时保留原来的 SPlayer 图标。
 
-- SP 插件市场：[投稿 #33](https://github.com/SPlayer-Dev/plugins/issues/33) 已通过机器人校验，
-  [PR #34](https://github.com/SPlayer-Dev/plugins/pull/34) 等待维护者审核，尚未正式收录。
+- SP 插件市场：已收录「SPTL 任务栏歌词」，在 SPlayer 的插件市场中搜索并安装。
 - KDE Store：[Plasma 6](https://store.kde.org/p/2382272/) 和
-  [Plasma 5](https://store.kde.org/p/2382273/) 条目已上传，公开页面可访问。
+  [Plasma 5](https://store.kde.org/p/2382273/) 均已上架，也可通过面板的「获取新小部件」入口搜索安装。
 
 从市场安装单个组件后，仍需按上面的安装说明安装辅助服务及另一组件。
 发布状态详见 [发布说明](docs/release.md)。
