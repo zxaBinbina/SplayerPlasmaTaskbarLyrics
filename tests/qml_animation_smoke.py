@@ -79,6 +79,7 @@ Window {{
         property var settings: {json.dumps(dict(DEFAULTS, auxiliary="off", maxWidth=420))}
         property var track: ({{ title: "歌曲名称", artists: "演示歌手" }})
         property var playback: ({{ state: "paused", duration: 60000, offset: 0 }})
+        property var pendingVolume: null
         property var lines: {json.dumps(lines, ensure_ascii=False)}
         property int currentIndex: 0
         property real position: 500

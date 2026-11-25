@@ -34,6 +34,8 @@ class BridgeServer(ThreadingHTTPServer):
                 pass
         self.state = State(settings)
         self.lock = threading.RLock()
+        self.volume_osd_lock = threading.Lock()
+        self.volume_sequences = {}
         self.token = secrets.token_urlsafe(32)
         self.monitor_stop = threading.Event()
         self.monitor = None
@@ -147,6 +149,9 @@ class Handler(BaseHTTPRequestHandler):
                 state = self.server.state
                 result = {"protocol": 1, "revision": state.content_revision,
                           "token": self.server.token, "playback": state.playback,
+                          "pendingVolume": next((c["value"] for c in reversed(state.commands)
+                              if c["action"] == "setVolume" and state.clock() - c["created"] < 3), None)
+                              if state.connected else None,
                           "serverTime": int(time.time() * 1000)}
                 if query.get("revision", ["-1"])[0] != revision:
                     result["content"] = state.content()
@@ -204,6 +209,21 @@ class Handler(BaseHTTPRequestHandler):
                         if not self.server.state.connected:
                             raise ValueError("plugin disconnected")
                         percent = int(self.server.state.playback["volume"] * 100 + 0.5)
+                    elif action == "setVolume" and data.get("osd") is True:
+                        volume_client, volume_sequence = data.get("volumeClient"), data.get("volumeSequence")
+                        ordered_volume = volume_client is not None or volume_sequence is not None
+                        if ordered_volume:
+                            if not isinstance(volume_client, str) or not 1 <= len(volume_client) <= 128 or \
+                                    type(volume_sequence) is not int or volume_sequence < 1:
+                                raise ValueError("invalid volume sequence")
+                            if volume_sequence <= self.server.volume_sequences.get(volume_client, 0):
+                                return self.respond(200, {"id": None, "osd": False, "superseded": True})
+                        command_id = self.server.state.command(action, data.get("value"))
+                        percent = int(self.server.state.commands[-1]["value"] * 100 + 0.5)
+                        if ordered_volume:
+                            if volume_client not in self.server.volume_sequences and len(self.server.volume_sequences) >= 256:
+                                self.server.volume_sequences.pop(next(iter(self.server.volume_sequences)))
+                            self.server.volume_sequences[volume_client] = volume_sequence
                     elif action == "favorite":
                         state = self.server.state
                         value = data.get("value")
@@ -231,8 +251,21 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/command" and action == "volumeOsd":
                 # The percentage comes from SP's snapshot, never the caller.
                 # Keep desktop D-Bus IO outside the playback lock.
-                self.server.environment.show_volume(percent)
+                with self.server.volume_osd_lock:
+                    self.server.environment.show_volume(percent)
                 return self.respond(200, {"ok": True})
+            if parsed.path == "/command" and action == "setVolume":
+                # Every input queues its target before desktop IO, and displays
+                # that same target without waiting for SP to apply it.
+                with self.server.volume_osd_lock:
+                    with self.server.lock:
+                        shown = not ordered_volume or volume_sequence == self.server.volume_sequences.get(volume_client)
+                    if shown:
+                        try:
+                            self.server.environment.show_volume(percent)
+                        except OSError:
+                            shown = False  # Playback was accepted even if the OSD failed.
+                return self.respond(200, {"id": command_id, "osd": shown})
             return self.respond(404, {"error": "not found"})
         except (ValueError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})

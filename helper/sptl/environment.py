@@ -157,9 +157,13 @@ class Environment:
 
     def show_volume(self, percent):
         # Plasma has a player-specific OSD; this never changes system volume.
+        data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
+        icons = (data / "plasma/plasmoids/org.kde.plasma.sptl/contents/images/splayer.svg",
+                 Path(__file__).resolve().parents[2] / "plasmoid/contents/images/splayer.svg")
+        icon = next((str(path) for path in icons if path.is_file()), "SPlayer-Next")
         try:
             result = self.dbus("org.kde.osdService.mediaPlayerVolumeChanged",
-                               str(percent), "SPlayer", "multimedia-player",
+                               str(percent), "SPlayer", icon,
                                dest="org.kde.plasmashell", path="/org/kde/osdService")
         except (OSError, subprocess.SubprocessError) as error:
             raise OSError("Plasma volume OSD unavailable") from error

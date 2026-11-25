@@ -89,9 +89,9 @@ Item {
     onHeightChanged: Qt.callLater(function() { root.resize(true); controlsMotion.complete(); })
     Connections {
         target: bridge
-        function onPlaybackChanged() {
-            if (volumeFeedback.running && bridge.connected && bridge.playback.volume !== root.lastFeedbackVolume)
-                root.showVolumeFeedback();
+        function onPlaybackChanged() { root.reconcileVolume(); }
+        function onConnectedChanged() {
+            if (!bridge.connected) { volumeFeedback.stop(); root.predictedVolume = -1; }
         }
         function onMotionDurationChanged() {
             if (bridge.motionDuration === 0) { root.resize(true); controlsMotion.complete(); }
@@ -106,18 +106,19 @@ Item {
         } else if (bridge.settings.clickAction === "open") bridge.command("open");
         else if (bridge.settings.clickAction === "popup") popupRequested();
     }
-    property real lastFeedbackVolume: -1
-    property bool volumeFeedbackShown: false
-    function showVolumeFeedback() {
-        lastFeedbackVolume = bridge.playback.volume;
-        volumeFeedbackShown = true;
-        bridge.command("volumeOsd");
+    property real predictedVolume: -1
+    function reconcileVolume() {
+        // Old snapshots must not pull the OSD backwards during a scroll burst
+        // or while an absolute volume command is still awaiting SP's ack.
+        if (!bridge.connected || predictedVolume < 0 || volumeFeedback.running || bridge.pendingVolume !== null) return;
+        if (Math.abs(predictedVolume - bridge.playback.volume) > 0.000001)
+            bridge.command("volumeOsd");
+        predictedVolume = -1;
     }
     Timer {
         id: volumeFeedback
         interval: 1500
-        // Even a no-op at the volume limits should display the native OSD.
-        onTriggered: { if (bridge.connected && !root.volumeFeedbackShown) root.showVolumeFeedback(); }
+        onTriggered: root.reconcileVolume()
     }
     HoverHandler { id: hover }
     WheelHandler {
@@ -127,12 +128,12 @@ Item {
             if (bridge.connected) {
                 var delta = event.angleDelta.y || event.angleDelta.x || event.pixelDelta.y || event.pixelDelta.x;
                 if (delta) {
-                    root.lastFeedbackVolume = bridge.playback.volume;
-                    root.volumeFeedbackShown = false;
-                    bridge.command("volume", (delta > 0 ? 1 : -1) * 0.05);
+                    var base = root.predictedVolume >= 0 ? root.predictedVolume :
+                        bridge.pendingVolume !== null ? bridge.pendingVolume : bridge.playback.volume;
+                    root.predictedVolume = Math.max(0, Math.min(1, base + (delta > 0 ? 0.05 : -0.05)));
                     volumeFeedback.restart();
-                    if ((delta < 0 && bridge.playback.volume === 0) || (delta > 0 && bridge.playback.volume === 1))
-                        root.showVolumeFeedback();
+                    // Send once per wheel event; OSD and playback use one target.
+                    bridge.command("setVolume", root.predictedVolume, true);
                 }
             }
             event.accepted = true;

@@ -110,6 +110,82 @@ class HttpTests(unittest.TestCase):
         finally:
             release.set(); worker.join()
 
+    def test_each_volume_input_queues_and_displays_its_target_before_sp_applies_it(self):
+        data = snapshot()
+        data["playback"]["volume"] = .5
+        self.request("POST", "/exchange", data)
+        body = {"token": self.server.token, "action": "setVolume", "osd": True}
+        ids = []
+        for volume, percent in ((.55, 55), (.6, 60), (.65, 65)):
+            status, response = self.request("POST", "/command", dict(body, value=volume))
+            self.assertEqual(status, 200)
+            ids.append(response["id"])
+            self.assertEqual(self.env.volume_osds[-1], percent)
+            _, state = self.request("GET", "/state")
+            self.assertEqual(state["pendingVolume"], volume)
+            self.assertEqual(state["playback"]["volume"], .5)
+        self.assertEqual(len(set(ids)), 3)
+        self.assertEqual([c["value"] for c in self.server.state.commands], [.55, .6, .65])
+        data["ack"] = ids[:1]
+        data["playback"]["volume"] = .55
+        self.request("POST", "/exchange", data)
+        self.assertEqual(self.request("GET", "/state")[1]["pendingVolume"], .65)
+        data["ack"] = ids
+        data["playback"]["volume"] = .65
+        self.request("POST", "/exchange", data)
+        self.assertIsNone(self.request("GET", "/state")[1]["pendingVolume"])
+
+    def test_preview_volume_preserves_validation_and_player_command_if_osd_fails(self):
+        self.request("POST", "/exchange", snapshot())
+        body = {"token": self.server.token, "action": "setVolume", "osd": True}
+        self.assertEqual(self.request("POST", "/command", dict(body, token="wrong", value=.6))[0], 403)
+        self.assertEqual(self.request("POST", "/command", dict(body, value=.6), {"X-SPTL-Client": "plugin"})[0], 403)
+        for value in (None, True, "0.6", float("nan")):
+            self.assertEqual(self.request("POST", "/command", dict(body, value=value))[0], 400)
+        self.assertEqual(self.server.state.commands, [])
+        self.assertEqual(self.env.volume_osds, [])
+        for volume, expected in ((-2, 0), (2, 100)):
+            self.assertEqual(self.request("POST", "/command", dict(body, value=volume))[0], 200)
+            self.assertEqual(self.env.volume_osds[-1], expected)
+            self.assertEqual(self.server.state.commands[-1]["value"], expected / 100)
+        with patch.object(self.env, "show_volume", side_effect=OSError("OSD unavailable")):
+            status, response = self.request("POST", "/command", dict(body, value=.6))
+        self.assertEqual(status, 200)
+        self.assertFalse(response["osd"])
+        self.assertEqual(self.server.state.commands[-1]["value"], .6)
+
+    def test_out_of_order_wheel_requests_cannot_override_a_newer_target(self):
+        self.request("POST", "/exchange", snapshot())
+        body = {"token": self.server.token, "action": "setVolume", "osd": True, "volumeClient": "wheel"}
+        for sequence, value in ((3, .65), (2, .6), (1, .55)):
+            status, response = self.request("POST", "/command", dict(body, volumeSequence=sequence, value=value))
+            self.assertEqual(status, 200)
+            if sequence < 3: self.assertTrue(response["superseded"])
+        self.assertEqual(self.env.volume_osds, [65])
+        self.assertEqual([c["value"] for c in self.server.state.commands], [.65])
+        self.assertEqual(self.request("GET", "/state")[1]["pendingVolume"], .65)
+        for sequence in (None, True, 0, "4"):
+            self.assertEqual(self.request("POST", "/command", dict(body, volumeSequence=sequence, value=.7))[0], 400)
+        self.assertEqual(self.request("POST", "/command", dict(body, volumeClient="second-widget", volumeSequence=1, value=.7))[0], 200)
+        self.assertEqual(self.env.volume_osds, [65, 70])
+
+    def test_slow_osd_does_not_delay_queueing_volume_or_block_state(self):
+        self.request("POST", "/exchange", snapshot())
+        started, release = threading.Event(), threading.Event()
+        def delayed(percent): started.set(); release.wait(3)
+        self.env.show_volume = delayed
+        worker = threading.Thread(target=lambda: self.request("POST", "/command", {
+            "token": self.server.token, "action": "setVolume", "value": .6, "osd": True}))
+        worker.start()
+        try:
+            self.assertTrue(started.wait(1))
+            status, state = self.request("GET", "/state")
+            self.assertEqual(status, 200)
+            self.assertEqual(state["pendingVolume"], .6)
+            self.assertEqual(self.server.state.commands[-1]["value"], .6)
+        finally:
+            release.set(); worker.join()
+
     def test_liked_start_launches_then_delivers_after_plugin_connects(self):
         _, state = self.request("GET", "/state")
         body = {"token": state["token"], "action": "startLiked"}

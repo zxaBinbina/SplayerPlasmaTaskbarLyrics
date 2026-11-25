@@ -120,7 +120,7 @@ Window {{
              "translatedLyric":"The next line stays in sync"},
             {"startTime":12000,"endTime":18000,"words":[{"word":"没有翻译时显示下一句","startTime":12000,"endTime":18000}]}
         ],
-        "playback":{"state":"paused","position":2600,"duration":120000,"speed":1,"offset":0,"timestamp":int(time.time()*1000)}
+        "playback":{"state":"paused","position":2600,"duration":120000,"speed":1,"offset":0,"volume":0.5,"timestamp":int(time.time()*1000)}
     }
     def publish():
         server.update_settings(data["settings"])
@@ -216,7 +216,8 @@ Window {{
         app.sendEvent(window, wheel)
         pump(80)
         with server.lock:
-            assert any(c["action"] == "volume" and c["value"] == 0.05 for c in server.state.commands)
+            assert any(c["action"] == "setVolume" and abs(c["value"] - .55) < 1e-6 for c in server.state.commands)
+        expected_volume = .55
         touchpad = QPointingDevice("Test touchpad", 991, QInputDevice.DeviceType.TouchPad,
             QPointingDevice.PointerType.Finger, QInputDevice.Capability.Position, 1, 0)
         cover = panel.findChild(QObject, "taskbarCover")
@@ -229,23 +230,75 @@ Window {{
             (touchpad, Qt.MouseEventSynthesizedBySystem, QPoint(0, -20), QPoint(0, 0))):
             for point in points:
                 with server.lock: server.state.commands.clear()
+                server.environment.volume_osds.clear()
                 event = QWheelEvent(point, point, pixel, angle, Qt.NoButton, Qt.NoModifier,
                     Qt.ScrollUpdate, False, source, device)
                 app.sendEvent(window, event)
                 pump(80)
+                expected_volume = max(0, min(1, expected_volume + (.05 if angle.y() > 0 else -.05)))
                 with server.lock:
-                    commands = [c for c in server.state.commands if c["action"] == "volume"]
+                    commands = [c for c in server.state.commands if c["action"] == "setVolume"]
                     assert len(commands) == 1, "wheel input must reach the widget once from artwork, lyrics and controls"
-                    assert commands[0]["value"] == (0.05 if angle.y() > 0 else -0.05)
-        # Feedback waits for SP's actual volume, then avoids repeated OSDs on polls.
+                    assert abs(commands[0]["value"] - expected_volume) < 1e-6
+                assert server.environment.volume_osds == [int(expected_volume * 100 + .5)], "OSD must show the target before SP changes its volume"
+        # Pending commands keep the prediction even when the scroll timer expires.
+        with server.lock: publish()
+        pump(1600)
+        assert server.environment.volume_osds == [int(expected_volume * 100 + .5)], "pending volume must not display stale feedback"
         server.environment.volume_osds.clear()
+        app.sendEvent(window, QWheelEvent(QPointF(110, 40), QPointF(110, 40), QPoint(0, 0), QPoint(0, 120),
+            Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False))
+        pump(100)
+        expected_volume = min(1, expected_volume + .05)
+        assert server.environment.volume_osds == [int(expected_volume * 100 + .5)], "a new scroll must immediately show the next target"
+        # Reset the fake player, then exercise a full burst with delayed acknowledgements.
         with server.lock:
+            server.state.commands.clear()
+            data["playback"]["volume"] = .5
+            publish()
+        pump(1600)
+        server.environment.volume_osds.clear()
+        for _ in range(3):
+            app.sendEvent(window, QWheelEvent(QPointF(110, 40), QPointF(110, 40), QPoint(0, 0), QPoint(0, 120),
+                Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False))
+            pump(80)
+        assert server.environment.volume_osds == [55, 60, 65], "every scroll must immediately display its new target"
+        with server.lock:
+            commands = list(server.state.commands)
+            assert len(commands) == 3, "each input must send immediately, without waiting for the burst to end"
+            assert all(c["action"] == "setVolume" for c in commands)
+            assert all(abs(c["value"] - v) < 1e-6 for c, v in zip(commands, (.55, .6, .65)))
             data["playback"]["volume"] = .55
+            data["ack"] = [commands[0]["id"]]
             publish()
         pump(650)
-        assert server.environment.volume_osds == [55]
+        assert server.environment.volume_osds == [55, 60, 65], "an old intermediate result must not pull the OSD backwards"
+        with server.lock:
+            data["playback"]["volume"] = .6
+            data["ack"] = [commands[1]["id"]]
+            publish()
+        pump(900)
+        assert server.environment.volume_osds == [55, 60, 65], "an outstanding target must survive the feedback timer"
+        with server.lock:
+            data["playback"]["volume"] = .65
+            data["ack"] = [commands[2]["id"]]
+            publish()
         pump(650)
-        assert server.environment.volume_osds == [55], "unchanged polls must not redisplay the OSD"
+        assert server.environment.volume_osds == [55, 60, 65], "a matching final result must not redisplay the OSD"
+        assert panel.property("predictedVolume") == -1
+        # Reverse immediately, then reconcile only if the actual final value differs.
+        app.sendEvent(window, QWheelEvent(QPointF(110, 40), QPointF(110, 40), QPoint(0, 0), QPoint(0, -120),
+            Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False))
+        pump(100)
+        assert server.environment.volume_osds == [55, 60, 65, 60]
+        with server.lock:
+            data["playback"]["volume"] = .58
+            data["ack"] = [server.state.commands[-1]["id"]]
+            publish()
+        pump(650)
+        assert server.environment.volume_osds == [55, 60, 65, 60], "the active prediction must remain stable"
+        pump(1000)
+        assert server.environment.volume_osds == [55, 60, 65, 60, 58], "final actual volume must reconcile a differing prediction"
         for volume, direction in ((0, -120), (1, 120)):
             with server.lock:
                 data["playback"]["volume"] = volume
@@ -257,6 +310,11 @@ Window {{
             app.sendEvent(window, event)
             pump(100)
             assert server.environment.volume_osds == [volume * 100], "volume limits still need feedback"
+            with server.lock:
+                assert server.state.commands[-1]["action"] == "setVolume"
+                assert server.state.commands[-1]["value"] == volume
+                data["ack"] = [server.state.commands[-1]["id"]]
+                publish()
         QTest.mouseClick(window, Qt.LeftButton, pos=QPoint(105, 40))
         pump(80)
         assert window.property("popupCount") == 1

@@ -12,6 +12,9 @@ Item {
     property var content: ({ settings: Defaults.settings, track: null, lines: [], locale: "zh-CN",
                              theme: ({available: false}), running: false, pluginConnected: false })
     property var playback: ({ state: "stopped", position: 0, duration: 0, speed: 1, offset: 0, timestamp: 0 })
+    property var pendingVolume: null
+    property string volumeClient: Date.now().toString(36) + Math.random().toString(36)
+    property int volumeSequence: 0
     property int revision: -1
     property string token: ""
     property bool reachable: false
@@ -97,6 +100,7 @@ Item {
                     var result = JSON.parse(request.responseText);
                     if (result.protocol !== 1) return;
                     if (result.content) content = result.content;
+                    pendingVolume = result.pendingVolume === undefined ? null : result.pendingVolume;
                     playback = result.playback;
                     revision = result.revision;
                     token = result.token;
@@ -108,7 +112,7 @@ Item {
         request.open("GET", endpoint + "/state?revision=" + revision);
         request.send();
     }
-    function command(action, value) {
+    function command(action, value, osd) {
         if (!token) { lastError = statusText(); return; }
         var request = new XMLHttpRequest();
         request.onreadystatechange = function() {
@@ -121,7 +125,12 @@ Item {
         request.open("POST", endpoint + "/command");
         request.setRequestHeader("Content-Type", "application/json");
         request.setRequestHeader("X-SPTL-Client", "plasma");
-        request.send(JSON.stringify({ token: token, action: action, value: value === undefined ? null : value }));
+        var payload = { token: token, action: action, value: value === undefined ? null : value, osd: osd === true };
+        if (action === "setVolume" && osd === true) {
+            payload.volumeClient = volumeClient;
+            payload.volumeSequence = ++volumeSequence;
+        }
+        request.send(JSON.stringify(payload));
     }
     function requestQueue(offset) {
         if (!connected || queueLoading) return;
