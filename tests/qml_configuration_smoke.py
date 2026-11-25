@@ -95,7 +95,7 @@ assert expr(model,'get(0).name')=="Settings"
 print("Settings sidebar switches between Chinese and English")
 loader.setProperty("active",False);pump(100)
 aboutComponent=QQmlComponent(engine,QUrl.fromLocalFile("/usr/share/plasma/shells/org.kde.plasma.desktop/contents/configuration/AboutPlugin.qml"))
-metadata={"pluginId":"org.kde.plasma.sptl","iconName":"application-x-plasma","name":"SPTL","version":"1.1.0","description":"Lyrics","website":"https://example.com","bugReportUrl":"","copyrightText":"","license":"AGPL-3.0-only","licenseText":"No license specified","authors":[],"otherContributors":[],"translators":[]}
+metadata={"pluginId":"org.kde.plasma.sptl","iconName":"application-x-plasma","name":"SPTL","version":json.loads((root/"plasmoid/metadata.json").read_text())["KPlugin"]["Version"],"description":"Lyrics","website":"https://example.com","bugReportUrl":"","copyrightText":"","license":"AGPL-3.0-only","licenseText":"No license specified","authors":[],"otherContributors":[],"translators":[]}
 about=aboutComponent.createWithInitialProperties({"metaData":metadata})
 assert about,"\n".join(e.toString() for e in aboutComponent.errors())
 about.setParent(owner);about.setParentItem(owner);about.setProperty("width",780);about.setProperty("height",850)

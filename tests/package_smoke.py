@@ -2,20 +2,25 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Validate native packaging in an isolated XDG directory."""
 import os
+import json
 import shutil
 import subprocess
 import tempfile
 import zipfile
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+from build import VERSION
 
 
 def main():
     for version in (5, 6):
-        archive = ROOT / f"dist/sptl-plasma{version}-1.1.0.plasmoid"
+        archive = ROOT / f"dist/sptl-plasma{version}-{VERSION}.plasmoid"
         with zipfile.ZipFile(archive) as package:
             assert package.testzip() is None
+            assert json.loads(package.read("metadata.json"))["KPlugin"]["Version"] == VERSION
             assert {"metadata.json", "contents/ui/main.qml", "contents/ui/Defaults.js",
                     "contents/config/main.xml", "contents/config/config.qml",
                     "contents/ui/ConfigGeneral.qml", "contents/ui/SettingsSync.qml",
@@ -24,6 +29,7 @@ def main():
                     "LICENSE", "THIRD_PARTY.md"}.issubset(package.namelist())
             if version == 5:
                 assert "metadata.desktop" in package.namelist()
+                assert f"X-KDE-PluginInfo-Version={VERSION}" in package.read("metadata.desktop").decode()
     tool = shutil.which("kpackagetool6")
     if not tool:
         print("Archive checks passed; native Plasma 6 package check skipped (tool unavailable)")

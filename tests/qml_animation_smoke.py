@@ -412,7 +412,9 @@ Window {{
         expression(bridge, "currentIndex = 20")
         pump(60)
         middle = lyrics.property("contentY")
-        assert middle > previous
+        assert middle > previous, {"previous": previous, "middle": middle, "following": popup.property("following"),
+            "visible": popup.isVisible(), "playlist": popup.property("playlistShown"), "progress": popup.property("playlistProgress"),
+            "duration": bridge.property("motionDuration"), "height": lyrics.property("height"), "count": lyrics.property("count")}
         pump(350)
         assert lyrics.property("contentY") > middle
         # User interaction takes ownership of scrolling and cancels following.
